@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Brain, Users, BarChart3, Clock } from "lucide-react";
+import { GraduationCap, Users, BarChart3, Clock } from "lucide-react";
 const LandingPage = () => {
   return <div className="min-h-screen bg-gradient-to-br from-background via-accent/20 to-background">
       {/* Header */}
@@ -8,7 +8,7 @@ const LandingPage = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Brain className="h-8 w-8 text-primary" />
+              <GraduationCap className="h-8 w-8 text-primary" />
               <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">OLevelX</h1>
             </div>
             <div className="flex gap-3">
@@ -39,11 +39,11 @@ const LandingPage = () => {
 
       {/* Features */}
       <section className="container mx-auto px-4 py-16">
-        <h3 className="text-3xl font-bold text-center mb-12">Why Choose Olevel?</h3>
+        <h3 className="text-3xl font-bold text-center mb-12">Why Choose OLevelX?</h3>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="group hover:shadow-lg transition-all duration-300 border-border/50">
             <CardHeader className="text-center">
-              <Brain className="h-12 w-12 text-primary mx-auto mb-4 group-hover:scale-110 transition-transform" />
+              <GraduationCap className="h-12 w-12 text-primary mx-auto mb-4 group-hover:scale-110 transition-transform" />
               <CardTitle>Smart Algorithm</CardTitle>
             </CardHeader>
             <CardContent>
@@ -87,7 +87,7 @@ const LandingPage = () => {
           <CardHeader>
             <CardTitle className="text-3xl mb-4">Ready to Transform Your Learning?</CardTitle>
             <CardDescription className="text-lg">
-              Join thousands of students already using FlashLearn to achieve their academic goals.
+              Join thousands of students already using OLevelX to achieve their academic goals.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
@@ -102,7 +102,7 @@ const LandingPage = () => {
       <footer className="border-t border-border/40 bg-muted/30">
         <div className="container mx-auto px-4 py-8">
           <div className="text-center text-muted-foreground">
-            <p>&copy; 2024 FlashLearn. Built with intelligence and precision.</p>
+            <p>&copy; 2024 OLevelX. Built with intelligence and precision.</p>
             <div className="mt-4">
               <Button variant="ghost" size="sm" className="text-xs opacity-50 hover:opacity-80">
                 Admin Access

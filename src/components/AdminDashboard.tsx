@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Users, BookOpen, BarChart3, Eye } from "lucide-react";
+import { Plus, Edit, Trash2, Users, BookOpen, BarChart3, Eye, Upload } from "lucide-react";
+import CSVUploadDialog from "./CSVUploadDialog";
 
 const AdminDashboard = () => {
   const [decks] = useState([
@@ -104,10 +105,20 @@ const AdminDashboard = () => {
           <TabsContent value="decks" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Manage Decks</h2>
-              <Button className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Create New Deck
-              </Button>
+              <div className="flex gap-2">
+                <CSVUploadDialog 
+                  trigger={
+                    <Button variant="outline" className="flex items-center gap-2">
+                      <Upload className="h-4 w-4" />
+                      Upload CSV
+                    </Button>
+                  }
+                />
+                <Button className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create New Deck
+                </Button>
+              </div>
             </div>
 
             <div className="grid gap-4">
