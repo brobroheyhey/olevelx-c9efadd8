@@ -24,7 +24,12 @@ const Index = () => {
 
   return (
     <>
-      {currentView === "landing" && <LandingPage onNavigateToAuth={() => handleNavigation("auth")} />}
+      {currentView === "landing" && (
+        <LandingPage 
+          onNavigateToAuth={() => handleNavigation("auth")} 
+          onNavigateToAdmin={() => handleNavigation("admin")}
+        />
+      )}
       {currentView === "flashcard" && (
         <FlashcardView 
           deckId={selectedDeckId} 

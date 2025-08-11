@@ -1,8 +1,26 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, Users, BarChart3, Clock } from "lucide-react";
-const LandingPage = ({ onNavigateToAuth }: { onNavigateToAuth: () => void }) => {
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { GraduationCap, Users, BarChart3, Clock, Shield } from "lucide-react";
+import { useState } from "react";
+const LandingPage = ({ onNavigateToAuth, onNavigateToAdmin }: { onNavigateToAuth: () => void; onNavigateToAdmin?: () => void }) => {
   console.log("LandingPage component is rendering...");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+
+  const handleAdminLogin = () => {
+    if (adminPassword === "brobroheyhey123") {
+      setIsDialogOpen(false);
+      setAdminPassword("");
+      setPasswordError("");
+      onNavigateToAdmin?.();
+    } else {
+      setPasswordError("Incorrect password");
+    }
+  };
   return <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
       {/* Header */}
       <header className="border-b border-border/40 backdrop-blur-sm bg-background/60">
@@ -104,6 +122,65 @@ const LandingPage = ({ onNavigateToAuth }: { onNavigateToAuth: () => void }) => 
           </div>
         </div>
       </footer>
+
+      {/* Admin Login Button - Fixed Bottom Right */}
+      <div className="fixed bottom-6 right-6">
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="opacity-50 hover:opacity-80 bg-background/80 backdrop-blur-sm border border-border/40"
+            >
+              <Shield className="h-4 w-4 mr-2" />
+              Admin
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Admin Access</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="admin-password">Admin Password</Label>
+                <Input
+                  id="admin-password"
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => {
+                    setAdminPassword(e.target.value);
+                    setPasswordError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleAdminLogin();
+                    }
+                  }}
+                  placeholder="Enter admin password"
+                />
+                {passwordError && (
+                  <p className="text-sm text-destructive">{passwordError}</p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleAdminLogin} className="flex-1">
+                  Login
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsDialogOpen(false);
+                    setAdminPassword("");
+                    setPasswordError("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
 };
 export default LandingPage;
