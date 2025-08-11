@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, Users, BarChart3, Clock } from "lucide-react";
-const LandingPage = () => {
+const LandingPage = ({ onNavigateToAuth }: { onNavigateToAuth: () => void }) => {
   return <div className="min-h-screen bg-gradient-to-br from-background via-accent/20 to-background">
       {/* Header */}
       <header className="border-b border-border/40 backdrop-blur-sm bg-background/60">
@@ -12,7 +12,7 @@ const LandingPage = () => {
               <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">OLevelX</h1>
             </div>
             <div className="flex gap-3">
-              <Button variant="ghost">Student Login</Button>
+              <Button variant="ghost" onClick={onNavigateToAuth}>Student Login</Button>
             </div>
           </div>
         </div>
@@ -27,7 +27,7 @@ const LandingPage = () => {
           </h2>
           <p className="text-xl text-muted-foreground mb-8 leading-relaxed">Experience the power of spaced repetition with our intelligent flashcard system. Learn faster, remember longer, and track your progress with scientific precision.</p>
           <div className="flex gap-4 justify-center">
-            <Button size="lg" className="px-8 py-3 text-lg">
+            <Button size="lg" className="px-8 py-3 text-lg" onClick={onNavigateToAuth}>
               Start Learning
             </Button>
           </div>
@@ -88,7 +88,7 @@ const LandingPage = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            <Button size="lg" className="px-12 py-3 text-lg">
+            <Button size="lg" className="px-12 py-3 text-lg" onClick={onNavigateToAuth}>
               Get Started Now
             </Button>
           </CardContent>

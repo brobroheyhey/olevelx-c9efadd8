@@ -2,12 +2,13 @@ import { useState } from "react";
 import LandingPage from "@/components/LandingPage";
 import FlashcardView from "@/components/FlashcardView";
 import AdminDashboard from "@/components/AdminDashboard";
+import AuthPage from "@/components/AuthPage";
 
 const Index = () => {
-  const [currentView, setCurrentView] = useState<"landing" | "flashcard" | "admin">("landing");
+  const [currentView, setCurrentView] = useState<"landing" | "flashcard" | "admin" | "auth">("landing");
 
   // Temporary navigation for demo purposes
-  const handleNavigation = (view: "landing" | "flashcard" | "admin") => {
+  const handleNavigation = (view: "landing" | "flashcard" | "admin" | "auth") => {
     setCurrentView(view);
   };
 
@@ -38,9 +39,15 @@ const Index = () => {
   return (
     <>
       <DemoNavigation />
-      {currentView === "landing" && <LandingPage />}
+      {currentView === "landing" && <LandingPage onNavigateToAuth={() => handleNavigation("auth")} />}
       {currentView === "flashcard" && <FlashcardView />}
       {currentView === "admin" && <AdminDashboard />}
+      {currentView === "auth" && (
+        <AuthPage 
+          onBack={() => handleNavigation("landing")} 
+          onAuthSuccess={() => handleNavigation("flashcard")}
+        />
+      )}
     </>
   );
 };
