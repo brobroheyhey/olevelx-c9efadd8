@@ -21,39 +21,9 @@ const Index = () => {
     setSelectedDeckId(deckId);
     setCurrentView("flashcard");
   };
-  // Demo navigation overlay
-  const DemoNavigation = () => (
-    <div className="fixed top-4 right-4 z-50 flex gap-2">
-      <button 
-        onClick={() => handleNavigation("landing")}
-        className="px-3 py-1 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-80"
-      >
-        Landing
-      </button>
-      <button 
-        onClick={() => handleNavigation("flashcard")}
-        className="px-3 py-1 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-80"
-      >
-        Flashcards
-      </button>
-      <button 
-        onClick={() => handleNavigation("admin")}
-        className="px-3 py-1 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-80"
-      >
-        Admin
-      </button>
-      <button 
-        onClick={() => handleNavigation("dashboard")}
-        className="px-3 py-1 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-80"
-      >
-        Dashboard
-      </button>
-    </div>
-  );
 
   return (
     <>
-      <DemoNavigation />
       {currentView === "landing" && <LandingPage onNavigateToAuth={() => handleNavigation("auth")} />}
       {currentView === "flashcard" && (
         <FlashcardView 
