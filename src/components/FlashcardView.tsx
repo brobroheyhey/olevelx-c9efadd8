@@ -1,191 +1,297 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { RotateCcw, Eye, EyeOff, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RotateCcw, ChevronRight, ArrowLeft, Eye, EyeOff, BookOpen, Lightbulb } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
-interface FlashcardData {
+interface FlashcardViewProps {
+  deckId?: string;
+  onBackToDashboard: () => void;
+}
+
+interface Card {
   id: string;
   front: string;
   back: string;
-  difficulty: number;
-  nextReview: Date;
 }
 
-const FlashcardView = () => {
-  const [currentCard] = useState<FlashcardData>({
-    id: "1",
-    front: "What is the capital of France?",
-    back: "Paris is the capital and most populous city of France.",
-    difficulty: 1.3,
-    nextReview: new Date()
-  });
-  
-  const [isFlipped, setIsFlipped] = useState(false);
-  const [progress] = useState(35);
-  const [cardCount] = useState({ current: 7, total: 20 });
+const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
+  const [cards, setCards] = useState<Card[]>([]);
+  const [deckName, setDeckName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [completedCards, setCompletedCards] = useState<Set<number>>(new Set());
+  const { toast } = useToast();
 
-  const handleDifficultyResponse = (quality: number) => {
-    // SM2 algorithm implementation will go here
-    console.log(`Response quality: ${quality}`);
-    setIsFlipped(false);
-    // Load next card logic
+  useEffect(() => {
+    if (deckId) {
+      fetchCards();
+    }
+  }, [deckId]);
+
+  const fetchCards = async () => {
+    try {
+      // Fetch deck info and cards
+      const { data: deckData } = await supabase
+        .from('decks')
+        .select('name')
+        .eq('id', deckId)
+        .single();
+
+      const { data: cardsData, error } = await supabase
+        .from('cards')
+        .select('id, front, back')
+        .eq('deck_id', deckId);
+
+      if (error) throw error;
+
+      setDeckName(deckData?.name || "Study Deck");
+      setCards(cardsData || []);
+    } catch (error) {
+      console.error('Error fetching cards:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load flashcards. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-accent/10 p-4">
-      <div className="max-w-4xl mx-auto">
+  const currentCard = cards[currentCardIndex];
+  const totalCards = cards.length;
+  const progress = totalCards > 0 ? (completedCards.size / totalCards) * 100 : 0;
+
+  const handleNextCard = () => {
+    if (currentCardIndex < cards.length - 1) {
+      setCurrentCardIndex(currentCardIndex + 1);
+      setShowAnswer(false);
+    } else {
+      // Session complete
+      toast({
+        title: "Session Complete!",
+        description: `You've completed ${completedCards.size} out of ${totalCards} cards.`,
+      });
+    }
+  };
+
+  const handleMarkComplete = () => {
+    setCompletedCards(prev => new Set([...prev, currentCardIndex]));
+    handleNextCard();
+  };
+
+  const handleSkip = () => {
+    handleNextCard();
+  };
+
+  const handleRestart = () => {
+    setCurrentCardIndex(0);
+    setShowAnswer(false);
+    setCompletedCards(new Set());
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading flashcards...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (cards.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold">Study Session</h1>
-            <div className="text-sm text-muted-foreground">
-              Card {cardCount.current} of {cardCount.total}
+        <header className="border-b border-border/40 backdrop-blur-sm bg-background/60">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-8 w-8 text-primary" />
+                <h1 className="text-2xl font-bold">OLevelX</h1>
+              </div>
+              <Button variant="outline" onClick={onBackToDashboard}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Dashboard
+              </Button>
             </div>
           </div>
-          <Progress value={progress} className="h-2" />
+        </header>
+        
+        <div className="container mx-auto px-4 py-20 text-center">
+          <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-4">No Cards Available</h2>
+          <p className="text-muted-foreground mb-6">This deck doesn't have any flashcards yet.</p>
+          <Button onClick={onBackToDashboard}>Return to Dashboard</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+      {/* Header */}
+      <header className="border-b border-border/40 backdrop-blur-sm bg-background/60">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-8 w-8 text-primary" />
+              <h1 className="text-2xl font-bold">OLevelX</h1>
+            </div>
+            <Button variant="outline" onClick={onBackToDashboard}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Dashboard
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <div className="container mx-auto px-4 py-8">
+        {/* Study Instructions */}
+        <Alert className="mb-6 border-primary/20 bg-primary/5">
+          <Lightbulb className="h-4 w-4" />
+          <AlertDescription className="text-sm">
+            <strong>Study Tip:</strong> Before revealing the answer, try to say or write out your response. 
+            This active recall technique will help improve your memory retention.
+          </AlertDescription>
+        </Alert>
+
+        {/* Deck Title and Progress */}
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold mb-4">{deckName}</h2>
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <Badge variant="outline" className="px-3 py-1">
+              Card {currentCardIndex + 1} of {totalCards}
+            </Badge>
+            <Badge variant="secondary" className="px-3 py-1">
+              {completedCards.size} completed
+            </Badge>
+          </div>
+          <Progress value={progress} className="max-w-md mx-auto h-2" />
         </div>
 
-        {/* Flashcard */}
-        <div className="mb-8">
+        {/* Main Flashcard */}
+        <div className="max-w-2xl mx-auto mb-8">
           <Card 
-            className={`
-              relative h-80 cursor-pointer transition-all duration-500 transform
-              ${isFlipped ? 'rotate-y-180' : ''}
-              hover:shadow-xl border-border/50
-            `}
-            onClick={() => setIsFlipped(!isFlipped)}
+            className="h-96 cursor-pointer transition-all duration-300 hover:shadow-lg border-border/50"
+            onClick={() => setShowAnswer(!showAnswer)}
             style={{
-              transformStyle: 'preserve-3d',
               background: 'var(--gradient-card)',
-              boxShadow: isFlipped ? 'var(--shadow-card-hover)' : 'var(--shadow-card)'
+              boxShadow: 'var(--shadow-card)'
             }}
           >
-            {/* Front Side */}
-            <CardContent 
-              className={`
-                absolute inset-0 flex items-center justify-center p-8 text-center
-                ${isFlipped ? 'opacity-0 pointer-events-none' : 'opacity-100'}
-                transition-opacity duration-300
-              `}
-              style={{ backfaceVisibility: 'hidden' }}
-            >
-              <div>
-                <div className="mb-4 text-muted-foreground">
-                  <Eye className="h-6 w-6 mx-auto mb-2" />
-                  <p className="text-sm">Question</p>
-                </div>
-                <p className="text-xl font-medium leading-relaxed">
-                  {currentCard.front}
-                </p>
-                <p className="text-sm text-muted-foreground mt-6">
-                  Click to reveal answer
-                </p>
+            <CardHeader className="text-center">
+              <div className="flex items-center justify-center gap-2 text-muted-foreground mb-2">
+                {showAnswer ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                <span className="text-sm font-medium">
+                  {showAnswer ? "Answer" : "Question"}
+                </span>
               </div>
-            </CardContent>
-
-            {/* Back Side */}
-            <CardContent 
-              className={`
-                absolute inset-0 flex items-center justify-center p-8 text-center
-                ${isFlipped ? 'opacity-100' : 'opacity-0 pointer-events-none'}
-                transition-opacity duration-300
-              `}
-              style={{ 
-                backfaceVisibility: 'hidden',
-                transform: 'rotateY(180deg)'
-              }}
-            >
-              <div>
-                <div className="mb-4 text-muted-foreground">
-                  <EyeOff className="h-6 w-6 mx-auto mb-2" />
-                  <p className="text-sm">Answer</p>
-                </div>
-                <p className="text-lg leading-relaxed">
-                  {currentCard.back}
-                </p>
+            </CardHeader>
+            <CardContent className="flex items-center justify-center h-full p-8">
+              <div className="text-center">
+                {showAnswer ? (
+                  <div>
+                    <p className="text-xl leading-relaxed mb-4">{currentCard.back}</p>
+                    <p className="text-sm text-muted-foreground">Click to hide answer</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xl font-medium leading-relaxed mb-4">{currentCard.front}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Think about your answer, then click to reveal
+                    </p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Response Buttons */}
-        {isFlipped && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <Button
-              variant="destructive"
-              className="flex flex-col gap-2 h-auto p-4"
-              onClick={() => handleDifficultyResponse(0)}
-            >
-              <XCircle className="h-6 w-6" />
-              <span className="text-sm">Again</span>
-              <span className="text-xs opacity-75">&lt; 1min</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              className="flex flex-col gap-2 h-auto p-4 border-orange-200 text-orange-600 hover:bg-orange-50"
-              onClick={() => handleDifficultyResponse(1)}
-            >
-              <Clock className="h-6 w-6" />
-              <span className="text-sm">Hard</span>
-              <span className="text-xs opacity-75">6min</span>
-            </Button>
-            
-            <Button
-              variant="outline"
-              className="flex flex-col gap-2 h-auto p-4"
-              onClick={() => handleDifficultyResponse(2)}
-            >
-              <CheckCircle2 className="h-6 w-6" />
-              <span className="text-sm">Good</span>
-              <span className="text-xs opacity-75">10min</span>
-            </Button>
-            
-            <Button
-              variant="default"
-              className="flex flex-col gap-2 h-auto p-4 bg-green-600 hover:bg-green-700"
-              onClick={() => handleDifficultyResponse(3)}
-            >
-              <CheckCircle2 className="h-6 w-6" />
-              <span className="text-sm">Easy</span>
-              <span className="text-xs opacity-75">4 days</span>
-            </Button>
-          </div>
-        )}
+        {/* Action Buttons */}
+        <div className="max-w-md mx-auto">
+          {showAnswer ? (
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <Button 
+                variant="outline" 
+                onClick={handleSkip}
+                className="flex items-center gap-2"
+              >
+                <ChevronRight className="h-4 w-4" />
+                Skip
+              </Button>
+              <Button 
+                onClick={handleMarkComplete}
+                className="flex items-center gap-2"
+              >
+                <ChevronRight className="h-4 w-4" />
+                Got It!
+              </Button>
+            </div>
+          ) : (
+            <div className="flex justify-center mb-6">
+              <Button 
+                onClick={() => setShowAnswer(true)}
+                size="lg"
+                className="px-8"
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                Reveal Answer
+              </Button>
+            </div>
+          )}
 
-        {/* Control Buttons */}
-        <div className="flex justify-center gap-4">
-          <Button
-            variant="outline"
-            onClick={() => setIsFlipped(!isFlipped)}
-            className="flex items-center gap-2"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Flip Card
-          </Button>
+          {/* Secondary Actions */}
+          <div className="flex justify-center gap-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowAnswer(!showAnswer)}
+              size="sm"
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Flip Card
+            </Button>
+            
+            {currentCardIndex === totalCards - 1 && (
+              <Button
+                variant="outline"
+                onClick={handleRestart}
+                size="sm"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Restart Deck
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Statistics */}
-        <Card className="mt-8 bg-muted/20">
-          <CardContent className="p-6">
-            <h3 className="font-semibold mb-4">Session Statistics</h3>
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-2xl font-bold text-green-600">12</p>
-                <p className="text-sm text-muted-foreground">Correct</p>
+        {/* Session Summary */}
+        {completedCards.size === totalCards && (
+          <Card className="max-w-md mx-auto mt-8 bg-primary/5 border-primary/20">
+            <CardContent className="p-6 text-center">
+              <h3 className="text-lg font-semibold mb-2">Session Complete!</h3>
+              <p className="text-muted-foreground mb-4">
+                You've completed all {totalCards} cards in this deck.
+              </p>
+              <div className="flex gap-2 justify-center">
+                <Button onClick={handleRestart} variant="outline" size="sm">
+                  Study Again
+                </Button>
+                <Button onClick={onBackToDashboard} size="sm">
+                  Back to Dashboard
+                </Button>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-orange-600">3</p>
-                <p className="text-sm text-muted-foreground">Difficult</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-red-600">2</p>
-                <p className="text-sm text-muted-foreground">Incorrect</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
