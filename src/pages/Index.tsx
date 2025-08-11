@@ -6,8 +6,11 @@ import AuthPage from "@/components/AuthPage";
 import Dashboard from "@/components/Dashboard";
 
 const Index = () => {
+  console.log("Index component is loading...");
   const [currentView, setCurrentView] = useState<"landing" | "flashcard" | "admin" | "auth" | "dashboard">("landing");
   const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
+  
+  console.log("Current view:", currentView);
 
   // Temporary navigation for demo purposes
   const handleNavigation = (view: "landing" | "flashcard" | "admin" | "auth" | "dashboard") => {

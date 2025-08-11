@@ -2,7 +2,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, Users, BarChart3, Clock } from "lucide-react";
 const LandingPage = ({ onNavigateToAuth }: { onNavigateToAuth: () => void }) => {
-  return <div className="min-h-screen bg-gradient-to-br from-background via-accent/20 to-background">
+  console.log("LandingPage component is rendering...");
+  return <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
       {/* Header */}
       <header className="border-b border-border/40 backdrop-blur-sm bg-background/60">
         <div className="container mx-auto px-4 py-4">
@@ -108,6 +109,6 @@ const LandingPage = ({ onNavigateToAuth }: { onNavigateToAuth: () => void }) => 
           </div>
         </div>
       </footer>
-    </div>;
+    </div>
 };
 export default LandingPage;
