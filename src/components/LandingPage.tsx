@@ -13,7 +13,6 @@ const LandingPage = () => {
             </div>
             <div className="flex gap-3">
               <Button variant="ghost">Student Login</Button>
-              <Button variant="outline">Admin Login</Button>
             </div>
           </div>
         </div>
@@ -104,6 +103,11 @@ const LandingPage = () => {
         <div className="container mx-auto px-4 py-8">
           <div className="text-center text-muted-foreground">
             <p>&copy; 2024 FlashLearn. Built with intelligence and precision.</p>
+            <div className="mt-4">
+              <Button variant="ghost" size="sm" className="text-xs opacity-50 hover:opacity-80">
+                Admin Access
+              </Button>
+            </div>
           </div>
         </div>
       </footer>
