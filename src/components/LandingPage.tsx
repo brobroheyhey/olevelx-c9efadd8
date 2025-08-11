@@ -1,19 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Brain, Users, BarChart3, Clock } from "lucide-react";
-
 const LandingPage = () => {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-accent/20 to-background">
+  return <div className="min-h-screen bg-gradient-to-br from-background via-accent/20 to-background">
       {/* Header */}
       <header className="border-b border-border/40 backdrop-blur-sm bg-background/60">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Brain className="h-8 w-8 text-primary" />
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-                FlashLearn
-              </h1>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">OLevelX</h1>
             </div>
             <div className="flex gap-3">
               <Button variant="ghost">Student Login</Button>
@@ -30,10 +26,7 @@ const LandingPage = () => {
             Master Any Subject with
             <span className="block text-primary">Smart Flashcards</span>
           </h2>
-          <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
-            Experience the power of spaced repetition with our intelligent flashcard system. 
-            Learn faster, remember longer, and track your progress with scientific precision.
-          </p>
+          <p className="text-xl text-muted-foreground mb-8 leading-relaxed">Experience the power of spaced repetition with our intelligent flashcard system. Learn faster, remember longer, and track your progress with scientific precision.</p>
           <div className="flex gap-4 justify-center">
             <Button size="lg" className="px-8 py-3 text-lg">
               Start Learning
@@ -47,7 +40,7 @@ const LandingPage = () => {
 
       {/* Features */}
       <section className="container mx-auto px-4 py-16">
-        <h3 className="text-3xl font-bold text-center mb-12">Why Choose FlashLearn?</h3>
+        <h3 className="text-3xl font-bold text-center mb-12">Why Choose Olevel?</h3>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="group hover:shadow-lg transition-all duration-300 border-border/50">
             <CardHeader className="text-center">
@@ -85,17 +78,7 @@ const LandingPage = () => {
             </CardContent>
           </Card>
 
-          <Card className="group hover:shadow-lg transition-all duration-300 border-border/50">
-            <CardHeader className="text-center">
-              <Users className="h-12 w-12 text-primary mx-auto mb-4 group-hover:scale-110 transition-transform" />
-              <CardTitle>Admin Control</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-center">
-                Comprehensive admin panel for managing decks, cards, and student progress.
-              </CardDescription>
-            </CardContent>
-          </Card>
+          
         </div>
       </section>
 
@@ -124,8 +107,6 @@ const LandingPage = () => {
           </div>
         </div>
       </footer>
-    </div>
-  );
+    </div>;
 };
-
 export default LandingPage;
