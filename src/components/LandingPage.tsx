@@ -37,7 +37,7 @@ const LandingPage = () => {
       {/* Features */}
       <section className="container mx-auto px-4 py-16">
         <h3 className="text-3xl font-bold text-center mb-12">Why Choose OLevelX?</h3>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
           <Card className="group hover:shadow-lg transition-all duration-300 border-border/50">
             <CardHeader className="text-center">
               <GraduationCap className="h-12 w-12 text-primary mx-auto mb-4 group-hover:scale-110 transition-transform" />
