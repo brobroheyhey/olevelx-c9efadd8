@@ -30,9 +30,6 @@ const LandingPage = () => {
             <Button size="lg" className="px-8 py-3 text-lg">
               Start Learning
             </Button>
-            <Button variant="outline" size="lg" className="px-8 py-3 text-lg">
-              Watch Demo
-            </Button>
           </div>
         </div>
       </section>
