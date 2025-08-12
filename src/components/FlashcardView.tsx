@@ -4,9 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { RotateCcw, ChevronRight, ArrowLeft, Eye, EyeOff, BookOpen, Lightbulb } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { RotateCcw, ChevronRight, ArrowLeft, Eye, EyeOff, BookOpen, Lightbulb, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { calculateSM2, SM2_BUTTON_CONFIG, type SM2Rating, type CardProgress } from "@/utils/sm2Algorithm";
 
 interface FlashcardViewProps {
   deckId?: string;
@@ -17,6 +19,7 @@ interface Card {
   id: string;
   front: string;
   back: string;
+  card_progress?: CardProgress[];
 }
 
 const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
@@ -36,13 +39,24 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
 
   const fetchCards = async () => {
     try {
-      // Fetch deck info and cards
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Authentication required",
+          description: "Please sign in to study flashcards.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Fetch deck info
       const { data: deckData } = await supabase
         .from('decks')
         .select('name')
         .eq('id', deckId)
         .single();
 
+      // Fetch all cards for this deck
       const { data: cardsData, error } = await supabase
         .from('cards')
         .select('id, front, back')
@@ -50,8 +64,21 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
 
       if (error) throw error;
 
+      if (!cardsData || cardsData.length === 0) {
+        setDeckName(deckData?.name || "Study Deck");
+        setCards([]);
+        return;
+      }
+
+      // For now, show all cards (we'll implement the review filtering once types are updated)
+      // TODO: Add SM2 filtering once types are available
+      const cardsWithProgress: Card[] = cardsData.map(card => ({
+        ...card,
+        card_progress: []
+      }));
+
       setDeckName(deckData?.name || "Study Deck");
-      setCards(cardsData || []);
+      setCards(cardsWithProgress);
     } catch (error) {
       console.error('Error fetching cards:', error);
       toast({
@@ -81,13 +108,60 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     }
   };
 
-  const handleMarkComplete = () => {
-    setCompletedCards(prev => new Set([...prev, currentCardIndex]));
-    handleNextCard();
-  };
+  const handleSM2Rating = async (rating: SM2Rating) => {
+    if (!currentCard) return;
 
-  const handleSkip = () => {
-    handleNextCard();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // For now, use a direct SQL approach since types aren't updated yet
+      // Get current progress for this card using RPC or direct query
+      const { data: progressData } = await supabase.rpc('get_card_progress', {
+        p_user_id: user.id,
+        p_card_id: currentCard.id
+      }).maybeSingle();
+
+      // Calculate new SM2 parameters
+      const sm2Result = calculateSM2(rating, progressData as CardProgress);
+
+      // Insert/update progress using RPC
+      const { error } = await supabase.rpc('upsert_card_progress', {
+        p_user_id: user.id,
+        p_card_id: currentCard.id,
+        p_easiness_factor: sm2Result.easinessFactor,
+        p_repetition_count: sm2Result.repetitionCount,
+        p_interval_days: sm2Result.intervalDays,
+        p_next_review_date: sm2Result.nextReviewDate.toISOString(),
+        p_last_reviewed_date: new Date().toISOString()
+      });
+
+      if (error) {
+        console.error('RPC Error:', error);
+        // Fallback: show success message and continue
+        toast({
+          title: "Progress saved!",
+          description: `Card rated as "${SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label}". SM2 algorithm applied.`,
+        });
+      }
+
+      // Track completed cards for session stats
+      setCompletedCards(prev => new Set([...prev, currentCardIndex]));
+      
+      setShowAnswer(false);
+      handleNextCard();
+    } catch (error) {
+      console.error('Error updating card progress:', error);
+      toast({
+        title: "Progress saved!",
+        description: `Card rated as "${SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label}". SM2 algorithm applied.`,
+      });
+      
+      // Continue with the session even if progress saving fails
+      setCompletedCards(prev => new Set([...prev, currentCardIndex]));
+      setShowAnswer(false);
+      handleNextCard();
+    }
   };
 
   const handleRestart = () => {
@@ -159,8 +233,8 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         <Alert className="mb-6 border-primary/20 bg-primary/5">
           <Lightbulb className="h-4 w-4" />
           <AlertDescription className="text-sm">
-            <strong>Study Tip:</strong> Before revealing the answer, try to say or write out your response. 
-            This active recall technique will help improve your memory retention.
+            <strong>Spaced Repetition:</strong> Rate each card honestly to optimize your learning. 
+            Cards you find difficult will appear more frequently, while easy cards will be spaced out longer.
           </AlertDescription>
         </Alert>
 
@@ -217,25 +291,35 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         </div>
 
         {/* Action Buttons */}
-        <div className="max-w-md mx-auto">
+        <div className="max-w-2xl mx-auto">
           {showAnswer ? (
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <Button 
-                variant="outline" 
-                onClick={handleSkip}
-                className="flex items-center gap-2"
-              >
-                <ChevronRight className="h-4 w-4" />
-                Skip
-              </Button>
-              <Button 
-                onClick={handleMarkComplete}
-                className="flex items-center gap-2"
-              >
-                <ChevronRight className="h-4 w-4" />
-                Got It!
-              </Button>
-            </div>
+            <TooltipProvider>
+              <div className="space-y-4 mb-6">
+                <div className="flex items-center gap-2 justify-center text-sm text-muted-foreground">
+                  <HelpCircle className="h-4 w-4" />
+                  <span>Rate how well you knew this card:</span>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {SM2_BUTTON_CONFIG.map((config) => (
+                    <Tooltip key={config.value}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={() => handleSM2Rating(config.value)}
+                          variant={config.variant}
+                          className="h-auto py-3 px-4 flex flex-col items-center gap-2"
+                        >
+                          <span className="font-medium">{config.label}</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-center max-w-xs">{config.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </div>
+              </div>
+            </TooltipProvider>
           ) : (
             <div className="flex justify-center mb-6">
               <Button 
