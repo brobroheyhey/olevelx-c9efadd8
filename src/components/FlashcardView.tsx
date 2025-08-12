@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { RotateCcw, ChevronRight, ArrowLeft, Eye, EyeOff, BookOpen, Lightbulb, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { calculateSM2, SM2_BUTTON_CONFIG, type SM2Rating, type CardProgress } from "@/utils/sm2Algorithm";
+import { calculateAnkiSM2, SM2_BUTTON_CONFIG, type SM2Rating, type AnkiCardProgress, CARD_STATES } from "@/utils/sm2Algorithm";
 
 interface FlashcardViewProps {
   deckId?: string;
@@ -19,7 +19,7 @@ interface Card {
   id: string;
   front: string;
   back: string;
-  card_progress?: CardProgress[];
+  card_progress?: AnkiCardProgress[];
 }
 
 const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
@@ -115,15 +115,26 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Calculate new SM2 parameters (for now without existing progress)
-      const sm2Result = calculateSM2(rating);
+      // Calculate new Anki SM2 parameters (for now without existing progress)
+      const sm2Result = calculateAnkiSM2(rating);
 
-      // For demonstration, show the SM2 calculation result
+      // Show detailed Anki-style SM2 result
       const ratingLabel = SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label || 'Unknown';
+      const stateLabel = sm2Result.state.charAt(0).toUpperCase() + sm2Result.state.slice(1);
+      
+      let description = `Rated as "${ratingLabel}". State: ${stateLabel}. Next review in ${sm2Result.intervalDays} day(s).`;
+      
+      if (sm2Result.isLeech) {
+        description += " ⚠️ Leech detected!";
+      }
+      
+      if (sm2Result.graduatedFromLearning) {
+        description += " 🎓 Graduated to review!";
+      }
       
       toast({
-        title: "SM2 Algorithm Applied!",
-        description: `Rated as "${ratingLabel}". Next review in ${sm2Result.intervalDays} day(s). Easiness: ${sm2Result.easinessFactor}`,
+        title: "Anki SM2 Applied!",
+        description,
       });
 
       // Track completed cards for session stats
