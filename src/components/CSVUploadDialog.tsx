@@ -5,12 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Upload, FileText, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CSVUploadDialogProps {
   trigger: React.ReactNode;
+  onSuccess?: () => void;
 }
 
-const CSVUploadDialog = ({ trigger }: CSVUploadDialogProps) => {
+const CSVUploadDialog = ({ trigger, onSuccess }: CSVUploadDialogProps) => {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [deckName, setDeckName] = useState("");
@@ -29,6 +31,46 @@ const CSVUploadDialog = ({ trigger }: CSVUploadDialogProps) => {
     }
   };
 
+  const parseCSV = (csvText: string): { front: string; back: string }[] => {
+    const lines = csvText.trim().split('\n');
+    const cards: { front: string; back: string }[] = [];
+    
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      
+      // Simple CSV parsing - handles quoted values
+      const parts = [];
+      let current = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          parts.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      parts.push(current.trim());
+      
+      if (parts.length >= 2) {
+        // Remove surrounding quotes if they exist
+        const front = parts[0].replace(/^"(.*)"$/, '$1');
+        const back = parts[1].replace(/^"(.*)"$/, '$1');
+        
+        if (front && back) {
+          cards.push({ front, back });
+        }
+      }
+    }
+    
+    return cards;
+  };
+
   const handleUpload = async () => {
     if (!file || !deckName.trim()) {
       toast({
@@ -41,18 +83,83 @@ const CSVUploadDialog = ({ trigger }: CSVUploadDialogProps) => {
 
     setIsUploading(true);
     
-    // Simulate upload process
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setIsUploading(false);
-    toast({
-      title: "Success!",
-      description: `Deck "${deckName}" created with ${Math.floor(Math.random() * 50) + 10} cards.`,
-    });
-    
-    // Reset form
-    setFile(null);
-    setDeckName("");
+    try {
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Authentication required",
+          description: "Please log in to upload flashcards.",
+          variant: "destructive",
+        });
+        setIsUploading(false);
+        return;
+      }
+
+      // Read and parse CSV file
+      const csvText = await file.text();
+      const cards = parseCSV(csvText);
+      
+      if (cards.length === 0) {
+        toast({
+          title: "No valid cards found",
+          description: "Please check your CSV format. Each row should have Front,Back format.",
+          variant: "destructive",
+        });
+        setIsUploading(false);
+        return;
+      }
+
+      // Create deck in database
+      const { data: deck, error: deckError } = await supabase
+        .from('decks')
+        .insert({
+          name: deckName.trim(),
+          created_by: user.id,
+          is_public: false
+        })
+        .select()
+        .single();
+
+      if (deckError) {
+        throw deckError;
+      }
+
+      // Create cards in database
+      const cardsToInsert = cards.map(card => ({
+        deck_id: deck.id,
+        front: card.front,
+        back: card.back
+      }));
+
+      const { error: cardsError } = await supabase
+        .from('cards')
+        .insert(cardsToInsert);
+
+      if (cardsError) {
+        throw cardsError;
+      }
+
+      setIsUploading(false);
+      toast({
+        title: "Success!",
+        description: `Deck "${deckName}" created with ${cards.length} cards.`,
+      });
+      
+      // Reset form and close dialog
+      setFile(null);
+      setDeckName("");
+      onSuccess?.();
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      setIsUploading(false);
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

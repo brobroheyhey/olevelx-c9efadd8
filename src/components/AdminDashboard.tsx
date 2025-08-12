@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,11 +11,41 @@ import { Plus, Edit, Trash2, Users, BookOpen, BarChart3, Eye, Upload } from "luc
 import CSVUploadDialog from "./CSVUploadDialog";
 
 const AdminDashboard = () => {
-  const [decks] = useState([
-    { id: "1", name: "Geography Basics", cardCount: 45, activeStudents: 12, created: "2024-01-15" },
-    { id: "2", name: "Math Fundamentals", cardCount: 32, activeStudents: 8, created: "2024-01-10" },
-    { id: "3", name: "Science Vocabulary", cardCount: 67, activeStudents: 15, created: "2024-01-08" },
-  ]);
+  const [decks, setDecks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDecks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('decks')
+        .select(`
+          *,
+          cards(count)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const decksWithCardCount = data?.map(deck => ({
+        ...deck,
+        cardCount: deck.cards?.[0]?.count || 0
+      })) || [];
+
+      setDecks(decksWithCardCount);
+    } catch (error) {
+      console.error('Error fetching decks:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDecks();
+  }, []);
+
+  const handleCSVUploadSuccess = () => {
+    fetchDecks(); // Refresh the deck list
+  };
 
   const [cards] = useState([
     { id: "1", front: "What is the capital of France?", back: "Paris", deckId: "1" },
@@ -113,6 +144,7 @@ const AdminDashboard = () => {
                       Upload CSV
                     </Button>
                   }
+                  onSuccess={handleCSVUploadSuccess}
                 />
                 <Button className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
@@ -129,7 +161,7 @@ const AdminDashboard = () => {
                       <div>
                         <CardTitle>{deck.name}</CardTitle>
                         <CardDescription>
-                          Created on {new Date(deck.created).toLocaleDateString()}
+                          Created on {new Date(deck.created_at).toLocaleDateString()}
                         </CardDescription>
                       </div>
                       <div className="flex gap-2">
