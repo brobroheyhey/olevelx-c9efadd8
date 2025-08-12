@@ -24,6 +24,7 @@ interface StudyCard {
   interval_days: number;
   next_review_date: string;
   last_reviewed_date?: string;
+  reappearTime?: Date;
 }
 
 const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
@@ -191,21 +192,30 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
 
 
       // Format interval display
-      const getIntervalDisplay = (intervalDays: number) => {
-        if (intervalDays < 1) {
-          const minutes = Math.round(intervalDays * 24 * 60);
-          return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
-        } else if (intervalDays === 1) {
-          return '1 day';
+      const getIntervalDisplay = (intervalMinutes: number, staysInSession: boolean) => {
+        if (staysInSession) {
+          if (intervalMinutes < 60) {
+            return `${intervalMinutes} minute${intervalMinutes !== 1 ? 's' : ''}`;
+          } else {
+            const hours = Math.round(intervalMinutes / 60);
+            return `${hours} hour${hours !== 1 ? 's' : ''}`;
+          }
         } else {
-          return `${intervalDays} days`;
+          const days = Math.round(intervalMinutes / (24 * 60));
+          if (days === 1) {
+            return '1 day';
+          } else {
+            return `${days} days`;
+          }
         }
       };
 
       const ratingLabel = SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label || 'Unknown';
-      const intervalDisplay = getIntervalDisplay(sm2Result.intervalDays);
+      const intervalDisplay = getIntervalDisplay(sm2Result.intervalMinutes, sm2Result.staysInSession);
       
-      let description = `Card will appear again in ${intervalDisplay}.`;
+      let description = sm2Result.staysInSession 
+        ? `Card will reappear in this session in ${intervalDisplay}.`
+        : `Card will appear again in ${intervalDisplay}.`;
       
       if (sm2Result.isLeech) {
         description += " ⚠️ Leech detected!";
@@ -220,20 +230,41 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         description,
       });
 
-      // Remove card from study session
-      const newStudyCards = studyCards.filter((_, index) => index !== currentCardIndex);
-      setStudyCards(newStudyCards);
-      setCompletedCards(prev => new Set([...prev, currentCard.id]));
-      
-      // Adjust current index if needed
-      if (currentCardIndex >= newStudyCards.length && newStudyCards.length > 0) {
-        setCurrentCardIndex(newStudyCards.length - 1);
-      } else if (newStudyCards.length === 0) {
-        // Session complete
-        toast({
-          title: "Session Complete!",
-          description: `You've completed all available cards.`,
-        });
+      if (sm2Result.staysInSession) {
+        // Add card to back of queue with reappear time
+        const updatedCard = {
+          ...currentCard,
+          reappearTime: sm2Result.nextReviewDate
+        };
+        
+        const newStudyCards = [
+          ...studyCards.slice(0, currentCardIndex),
+          ...studyCards.slice(currentCardIndex + 1),
+          updatedCard
+        ];
+        
+        setStudyCards(newStudyCards);
+        
+        // Adjust current index
+        if (currentCardIndex >= newStudyCards.length - 1) {
+          setCurrentCardIndex(0);
+        }
+      } else {
+        // Remove card from study session
+        const newStudyCards = studyCards.filter((_, index) => index !== currentCardIndex);
+        setStudyCards(newStudyCards);
+        setCompletedCards(prev => new Set([...prev, currentCard.id]));
+        
+        // Adjust current index if needed
+        if (currentCardIndex >= newStudyCards.length && newStudyCards.length > 0) {
+          setCurrentCardIndex(newStudyCards.length - 1);
+        } else if (newStudyCards.length === 0) {
+          // Session complete
+          toast({
+            title: "Session Complete!",
+            description: `You've completed all available cards.`,
+          });
+        }
       }
       
       setShowAnswer(false);

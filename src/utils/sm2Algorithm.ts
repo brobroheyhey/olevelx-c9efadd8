@@ -59,12 +59,14 @@ export interface AnkiSM2Result {
   state: CardState;
   easinessFactor: number;
   intervalDays: number;
+  intervalMinutes: number;
   repetitions: number;
   lapses: number;
   learningStep: number;
   nextReviewDate: Date;
   isLeech: boolean;
   graduatedFromLearning?: boolean;
+  staysInSession: boolean;
 }
 
 /**
@@ -85,6 +87,34 @@ function fuzzInterval(interval: number): number {
  */
 function minutesToDays(minutes: number): number {
   return Math.max(1, Math.round(minutes / (24 * 60)));
+}
+
+/**
+ * Get actual interval in minutes for short-term scheduling
+ */
+function getIntervalMinutes(state: CardState, learningStep: number, rating: SM2Rating, currentIntervalDays: number, easeFactor: number): number {
+  if (state === CARD_STATES.LEARNING || state === CARD_STATES.NEW) {
+    if (rating === SM2_RATINGS.AGAIN) {
+      return ANKI_DEFAULTS.LEARNING_STEPS[0];
+    } else {
+      const nextStep = learningStep + 1;
+      if (nextStep < ANKI_DEFAULTS.LEARNING_STEPS.length) {
+        return ANKI_DEFAULTS.LEARNING_STEPS[nextStep];
+      }
+    }
+  } else if (state === CARD_STATES.LAPSED) {
+    if (rating === SM2_RATINGS.AGAIN) {
+      return ANKI_DEFAULTS.LAPSE_STEPS[0];
+    } else {
+      const nextStep = learningStep + 1;
+      if (nextStep < ANKI_DEFAULTS.LAPSE_STEPS.length) {
+        return ANKI_DEFAULTS.LAPSE_STEPS[nextStep];
+      }
+    }
+  }
+  
+  // Default to days converted to minutes
+  return currentIntervalDays * 24 * 60;
 }
 
 /**
@@ -210,20 +240,32 @@ export function calculateAnkiSM2(rating: SM2Rating, currentProgress?: AnkiCardPr
       break;
   }
 
+  // Calculate actual interval in minutes
+  const intervalMinutes = getIntervalMinutes(newState, newLearningStep, rating, newInterval, newEase);
+  
+  // Determine if card stays in current session (< 1 day = 1440 minutes)
+  const staysInSession = intervalMinutes < 1440;
+
   // Calculate next review date
   const nextReviewDate = new Date();
-  nextReviewDate.setDate(nextReviewDate.getDate() + newInterval);
+  if (staysInSession) {
+    nextReviewDate.setMinutes(nextReviewDate.getMinutes() + intervalMinutes);
+  } else {
+    nextReviewDate.setDate(nextReviewDate.getDate() + newInterval);
+  }
 
   return {
     state: newState,
     easinessFactor: Math.round(newEase * 100) / 100,
     intervalDays: newInterval,
+    intervalMinutes,
     repetitions: newReps,
     lapses: newLapses,
     learningStep: newLearningStep,
     nextReviewDate,
     isLeech,
-    graduatedFromLearning
+    graduatedFromLearning,
+    staysInSession
   };
 }
 
