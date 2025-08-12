@@ -47,7 +47,10 @@ const Dashboard = ({ onSelectDeck, onLogout }: DashboardProps) => {
 
   const fetchDecks = async () => {
     try {
-      // Fetch all public decks with card counts
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Fetch both public decks and user's own decks
       const { data, error } = await supabase
         .from('decks')
         .select(`
@@ -56,7 +59,7 @@ const Dashboard = ({ onSelectDeck, onLogout }: DashboardProps) => {
           description,
           is_public
         `)
-        .eq('is_public', true);
+        .or(`is_public.eq.true${user ? `,created_by.eq.${user.id}` : ''}`);
 
       if (error) throw error;
 
