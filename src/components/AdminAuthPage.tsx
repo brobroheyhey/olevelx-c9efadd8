@@ -16,8 +16,6 @@ interface AdminAuthPageProps {
 const AdminAuthPage = ({ onBack, onAuthSuccess }: AdminAuthPageProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [adminPassword, setAdminPassword] = useState("");
   const { toast } = useToast();
 
   // Form states for Supabase auth
@@ -30,21 +28,19 @@ const AdminAuthPage = ({ onBack, onAuthSuccess }: AdminAuthPageProps) => {
     // Check if user is already authenticated with Supabase
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        setIsAuthenticated(true);
+        onAuthSuccess();
       }
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
-        setIsAuthenticated(true);
-      } else {
-        setIsAuthenticated(false);
+        onAuthSuccess();
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [onAuthSuccess]);
 
   const handleSupabaseAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,11 +54,7 @@ const AdminAuthPage = ({ onBack, onAuthSuccess }: AdminAuthPageProps) => {
       });
 
       if (error) throw error;
-
-      toast({
-        title: "Authentication Successful",
-        description: "You are now logged in. Please enter the admin password.",
-      });
+      // Authentication successful - onAuthSuccess will be called by the auth state change listener
     } catch (error: any) {
       setError(error.message);
     } finally {
@@ -70,17 +62,6 @@ const AdminAuthPage = ({ onBack, onAuthSuccess }: AdminAuthPageProps) => {
     }
   };
 
-  const handleAdminPasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    // Simple admin password check (in a real app, this would be more secure)
-    if (adminPassword === "admin123") {
-      onAuthSuccess();
-    } else {
-      setError("Invalid admin password");
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
@@ -106,10 +87,7 @@ const AdminAuthPage = ({ onBack, onAuthSuccess }: AdminAuthPageProps) => {
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold mb-4">Admin Dashboard Access</h2>
             <p className="text-muted-foreground">
-              {!isAuthenticated 
-                ? "Please sign in with your account first" 
-                : "Enter admin password to continue"
-              }
+              Please sign in with your account to access the admin dashboard
             </p>
           </div>
 
@@ -117,13 +95,10 @@ const AdminAuthPage = ({ onBack, onAuthSuccess }: AdminAuthPageProps) => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                {!isAuthenticated ? "Step 1: User Authentication" : "Step 2: Admin Verification"}
+                Admin Authentication
               </CardTitle>
               <CardDescription>
-                {!isAuthenticated 
-                  ? "Sign in with your regular account credentials"
-                  : "Verify admin access with password"
-                }
+                Sign in with your account credentials to access the admin dashboard
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -133,79 +108,44 @@ const AdminAuthPage = ({ onBack, onAuthSuccess }: AdminAuthPageProps) => {
                 </Alert>
               )}
 
-              {!isAuthenticated ? (
-                /* Supabase Authentication Form */
-                <form onSubmit={handleSupabaseAuth} className="space-y-4">
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="Enter your email"
-                        className="pl-10"
-                        value={authData.email}
-                        onChange={(e) => setAuthData(prev => ({ ...prev, email: e.target.value }))}
-                        required
-                      />
-                    </div>
+              <form onSubmit={handleSupabaseAuth} className="space-y-4">
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Enter your email"
+                      className="pl-10"
+                      value={authData.email}
+                      onChange={(e) => setAuthData(prev => ({ ...prev, email: e.target.value }))}
+                      required
+                    />
                   </div>
-                  <div>
-                    <Label htmlFor="password">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="Enter your password"
-                        className="pl-10"
-                        value={authData.password}
-                        onChange={(e) => setAuthData(prev => ({ ...prev, password: e.target.value }))}
-                        required
-                      />
-                    </div>
+                </div>
+                <div>
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Enter your password"
+                      className="pl-10"
+                      value={authData.password}
+                      onChange={(e) => setAuthData(prev => ({ ...prev, password: e.target.value }))}
+                      required
+                    />
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Signing In..." : "Sign In"}
-                  </Button>
-                </form>
-              ) : (
-                /* Admin Password Form */
-                <form onSubmit={handleAdminPasswordSubmit} className="space-y-4">
-                  <div>
-                    <Label htmlFor="admin-password">Admin Password</Label>
-                    <div className="relative">
-                      <Shield className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="admin-password"
-                        type="password"
-                        placeholder="Enter admin password"
-                        className="pl-10"
-                        value={adminPassword}
-                        onChange={(e) => setAdminPassword(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <Button type="submit" className="w-full">
-                    Access Admin Dashboard
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Demo password: admin123
-                  </p>
-                </form>
-              )}
+                </div>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? "Signing In..." : "Access Admin Dashboard"}
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
-          {isAuthenticated && (
-            <div className="mt-4 p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-              <p className="text-sm text-green-700 dark:text-green-300 text-center">
-                ✓ User authentication successful
-              </p>
-            </div>
-          )}
         </div>
       </section>
     </div>
