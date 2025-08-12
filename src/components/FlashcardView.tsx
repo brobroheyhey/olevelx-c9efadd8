@@ -19,16 +19,23 @@ interface Card {
   id: string;
   front: string;
   back: string;
-  card_progress?: AnkiCardProgress[];
+  card_progress?: {
+    id: string;
+    easiness_factor: number;
+    repetition_count: number;
+    interval_days: number;
+    next_review_date: string;
+    last_reviewed_date?: string;
+  }[];
 }
 
 const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
-  const [cards, setCards] = useState<Card[]>([]);
+  const [studyCards, setStudyCards] = useState<Card[]>([]);
   const [deckName, setDeckName] = useState("");
   const [loading, setLoading] = useState(true);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [completedCards, setCompletedCards] = useState<Set<number>>(new Set());
+  const [completedCards, setCompletedCards] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -56,29 +63,42 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         .eq('id', deckId)
         .single();
 
-      // Fetch all cards for this deck
+      // Fetch cards with their progress
       const { data: cardsData, error } = await supabase
         .from('cards')
-        .select('id, front, back')
+        .select(`
+          id, front, back,
+          card_progress (
+            id, easiness_factor, repetition_count, interval_days, 
+            next_review_date, last_reviewed_date
+          )
+        `)
         .eq('deck_id', deckId);
 
       if (error) throw error;
 
       if (!cardsData || cardsData.length === 0) {
         setDeckName(deckData?.name || "Study Deck");
-        setCards([]);
+        setStudyCards([]);
         return;
       }
 
-      // For now, show all cards (we'll implement the review filtering once types are updated)
-      // TODO: Add SM2 filtering once types are available
-      const cardsWithProgress: Card[] = cardsData.map(card => ({
-        ...card,
-        card_progress: []
-      }));
+      // Filter cards that are due for review or are new
+      const now = new Date();
+      const dueCards = cardsData.filter(card => {
+        // New cards (no progress) should be studied
+        if (!card.card_progress || card.card_progress.length === 0) {
+          return true;
+        }
+        
+        // Cards with progress - check if due
+        const progress = card.card_progress[0];
+        const nextReview = new Date(progress.next_review_date);
+        return nextReview <= now;
+      });
 
       setDeckName(deckData?.name || "Study Deck");
-      setCards(cardsWithProgress);
+      setStudyCards(dueCards);
     } catch (error) {
       console.error('Error fetching cards:', error);
       toast({
@@ -91,12 +111,12 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     }
   };
 
-  const currentCard = cards[currentCardIndex];
-  const totalCards = cards.length;
+  const currentCard = studyCards[currentCardIndex];
+  const totalCards = studyCards.length;
   const progress = totalCards > 0 ? (completedCards.size / totalCards) * 100 : 0;
 
   const handleNextCard = () => {
-    if (currentCardIndex < cards.length - 1) {
+    if (currentCardIndex < studyCards.length - 1) {
       setCurrentCardIndex(currentCardIndex + 1);
       setShowAnswer(false);
     } else {
@@ -115,14 +135,56 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Calculate new Anki SM2 parameters (for now without existing progress)
-      const sm2Result = calculateAnkiSM2(rating);
+      // Get existing progress
+      const existingProgress = currentCard.card_progress?.[0];
+      const currentProgress: AnkiCardProgress | undefined = existingProgress ? {
+        state: 'new' as const,
+        easiness_factor: existingProgress.easiness_factor,
+        interval_days: existingProgress.interval_days,
+        repetitions: existingProgress.repetition_count,
+        lapses: 0,
+        learning_step: 0,
+        next_review_date: existingProgress.next_review_date
+      } : undefined;
 
-      // Show detailed Anki-style SM2 result
+      // Calculate new SM2 parameters
+      const sm2Result = calculateAnkiSM2(rating, currentProgress);
+
+      // Save progress to database
+      const progressData = {
+        user_id: user.id,
+        card_id: currentCard.id,
+        easiness_factor: sm2Result.easinessFactor,
+        repetition_count: sm2Result.repetitions,
+        interval_days: sm2Result.intervalDays,
+        next_review_date: sm2Result.nextReviewDate.toISOString(),
+        last_reviewed_date: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('card_progress')
+        .upsert(progressData, {
+          onConflict: 'user_id,card_id'
+        });
+
+      if (error) throw error;
+
+      // Format interval display
+      const getIntervalDisplay = (intervalDays: number) => {
+        if (intervalDays < 1) {
+          const minutes = Math.round(intervalDays * 24 * 60);
+          return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+        } else if (intervalDays === 1) {
+          return '1 day';
+        } else {
+          return `${intervalDays} days`;
+        }
+      };
+
       const ratingLabel = SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label || 'Unknown';
-      const stateLabel = sm2Result.state.charAt(0).toUpperCase() + sm2Result.state.slice(1);
+      const intervalDisplay = getIntervalDisplay(sm2Result.intervalDays);
       
-      let description = `Rated as "${ratingLabel}". State: ${stateLabel}. Next review in ${sm2Result.intervalDays} day(s).`;
+      let description = `Card will appear again in ${intervalDisplay}.`;
       
       if (sm2Result.isLeech) {
         description += " ⚠️ Leech detected!";
@@ -133,28 +195,36 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       }
       
       toast({
-        title: "Anki SM2 Applied!",
+        title: `Rated "${ratingLabel}"`,
         description,
       });
 
-      // Track completed cards for session stats
-      setCompletedCards(prev => new Set([...prev, currentCardIndex]));
+      // Remove card from study session
+      const newStudyCards = studyCards.filter((_, index) => index !== currentCardIndex);
+      setStudyCards(newStudyCards);
+      setCompletedCards(prev => new Set([...prev, currentCard.id]));
+      
+      // Adjust current index if needed
+      if (currentCardIndex >= newStudyCards.length && newStudyCards.length > 0) {
+        setCurrentCardIndex(newStudyCards.length - 1);
+      } else if (newStudyCards.length === 0) {
+        // Session complete
+        toast({
+          title: "Session Complete!",
+          description: `You've completed all available cards.`,
+        });
+      }
       
       setShowAnswer(false);
-      handleNextCard();
     } catch (error) {
       console.error('Error processing SM2 rating:', error);
       const ratingLabel = SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label || 'Unknown';
       
       toast({
-        title: "Rating Recorded",
-        description: `Card rated as "${ratingLabel}". SM2 algorithm applied.`,
+        title: "Error",
+        description: `Failed to save progress. Please try again.`,
+        variant: "destructive"
       });
-      
-      // Continue with the session
-      setCompletedCards(prev => new Set([...prev, currentCardIndex]));
-      setShowAnswer(false);
-      handleNextCard();
     }
   };
 
@@ -175,7 +245,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     );
   }
 
-  if (cards.length === 0) {
+  if (studyCards.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
         {/* Header */}
@@ -196,8 +266,8 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         
         <div className="container mx-auto px-4 py-20 text-center">
           <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-4">No Cards Available</h2>
-          <p className="text-muted-foreground mb-6">This deck doesn't have any flashcards yet.</p>
+          <h2 className="text-2xl font-bold mb-4">No Cards Due</h2>
+          <p className="text-muted-foreground mb-6">All cards have been studied! Come back later for reviews.</p>
           <Button onClick={onBackToDashboard}>Return to Dashboard</Button>
         </div>
       </div>
@@ -338,30 +408,30 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
               Flip Card
             </Button>
             
-            {currentCardIndex === totalCards - 1 && (
+            {studyCards.length === 1 && (
               <Button
                 variant="outline"
-                onClick={handleRestart}
+                onClick={() => fetchCards()}
                 size="sm"
               >
                 <RotateCcw className="h-4 w-4 mr-2" />
-                Restart Deck
+                Refresh Cards
               </Button>
             )}
           </div>
         </div>
 
         {/* Session Summary */}
-        {completedCards.size === totalCards && (
+        {studyCards.length === 0 && completedCards.size > 0 && (
           <Card className="max-w-md mx-auto mt-8 bg-primary/5 border-primary/20">
             <CardContent className="p-6 text-center">
               <h3 className="text-lg font-semibold mb-2">Session Complete!</h3>
               <p className="text-muted-foreground mb-4">
-                You've completed all {totalCards} cards in this deck.
+                You've completed {completedCards.size} cards in this session.
               </p>
               <div className="flex gap-2 justify-center">
-                <Button onClick={handleRestart} variant="outline" size="sm">
-                  Study Again
+                <Button onClick={() => fetchCards()} variant="outline" size="sm">
+                  Check for More
                 </Button>
                 <Button onClick={onBackToDashboard} size="sm">
                   Back to Dashboard
