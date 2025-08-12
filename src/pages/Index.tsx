@@ -36,7 +36,7 @@ const Index = () => {
           onBackToDashboard={() => handleNavigation("dashboard")} 
         />
       )}
-      {currentView === "admin" && <AdminDashboard />}
+      {currentView === "admin" && <AdminDashboard onLogout={() => handleNavigation("landing")} />}
       {currentView === "dashboard" && (
         <Dashboard 
           onSelectDeck={handleSelectDeck}

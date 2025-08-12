@@ -11,7 +11,7 @@ import { Plus, Edit, Trash2, Users, BookOpen, BarChart3, Eye, Upload } from "luc
 import { useToast } from "@/components/ui/use-toast";
 import CSVUploadDialog from "./CSVUploadDialog";
 
-const AdminDashboard = () => {
+const AdminDashboard = ({ onLogout }: { onLogout?: () => void }) => {
   const [decks, setDecks] = useState<any[]>([]);
   const [cards, setCards] = useState<any[]>([]);
   const [selectedDeckId, setSelectedDeckId] = useState<string>("");
@@ -19,6 +19,10 @@ const AdminDashboard = () => {
   const [cardBack, setCardBack] = useState("");
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+
+  const handleLogout = () => {
+    onLogout?.();
+  };
 
   const fetchDecks = async () => {
     try {
@@ -162,7 +166,7 @@ const AdminDashboard = () => {
               <Badge variant="secondary" className="px-3 py-1">
                 Admin Portal
               </Badge>
-              <Button variant="outline" size="sm">Logout</Button>
+              <Button variant="outline" size="sm" onClick={handleLogout}>Logout</Button>
             </div>
           </div>
         </div>
