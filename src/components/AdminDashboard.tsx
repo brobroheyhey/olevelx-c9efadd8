@@ -8,11 +8,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Edit, Trash2, Users, BookOpen, BarChart3, Eye, Upload } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 import CSVUploadDialog from "./CSVUploadDialog";
 
 const AdminDashboard = () => {
   const [decks, setDecks] = useState<any[]>([]);
+  const [cards, setCards] = useState<any[]>([]);
+  const [selectedDeckId, setSelectedDeckId] = useState<string>("");
+  const [cardFront, setCardFront] = useState("");
+  const [cardBack, setCardBack] = useState("");
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   const fetchDecks = async () => {
     try {
@@ -43,15 +49,101 @@ const AdminDashboard = () => {
     fetchDecks();
   }, []);
 
+  const fetchCards = async (deckId: string) => {
+    if (!deckId) {
+      setCards([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('deck_id', deckId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCards(data || []);
+    } catch (error) {
+      console.error('Error fetching cards:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch cards",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeckChange = (deckId: string) => {
+    setSelectedDeckId(deckId);
+    fetchCards(deckId);
+  };
+
+  const handleAddCard = async () => {
+    if (!selectedDeckId || !cardFront.trim() || !cardBack.trim()) {
+      toast({
+        title: "Error",
+        description: "Please select a deck and fill in both front and back",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('cards')
+        .insert({
+          deck_id: selectedDeckId,
+          front: cardFront.trim(),
+          back: cardBack.trim(),
+        });
+
+      if (error) throw error;
+
+      setCardFront("");
+      setCardBack("");
+      fetchCards(selectedDeckId);
+      toast({
+        title: "Success",
+        description: "Card added successfully",
+      });
+    } catch (error) {
+      console.error('Error adding card:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add card",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    try {
+      const { error } = await supabase
+        .from('cards')
+        .delete()
+        .eq('id', cardId);
+
+      if (error) throw error;
+
+      fetchCards(selectedDeckId);
+      toast({
+        title: "Success",
+        description: "Card deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting card:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete card",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleCSVUploadSuccess = () => {
     fetchDecks(); // Refresh the deck list
   };
-
-  const [cards] = useState([
-    { id: "1", front: "What is the capital of France?", back: "Paris", deckId: "1" },
-    { id: "2", front: "What is 2 + 2?", back: "4", deckId: "2" },
-    { id: "3", front: "What is photosynthesis?", back: "The process by which plants make food", deckId: "3" },
-  ]);
 
   const [students] = useState([
     { id: "1", name: "John Smith", email: "john@example.com", decksStudied: 3, totalCards: 144 },
@@ -197,7 +289,12 @@ const AdminDashboard = () => {
                 <CardContent className="space-y-4">
                   <div>
                     <Label htmlFor="deck-select">Select Deck</Label>
-                    <select id="deck-select" className="w-full p-2 border rounded-md bg-background">
+                    <select 
+                      id="deck-select" 
+                      className="w-full p-2 border rounded-md bg-background"
+                      value={selectedDeckId}
+                      onChange={(e) => handleDeckChange(e.target.value)}
+                    >
                       <option value="">Choose a deck...</option>
                       {decks.map((deck) => (
                         <option key={deck.id} value={deck.id}>{deck.name}</option>
@@ -210,6 +307,8 @@ const AdminDashboard = () => {
                       id="card-front" 
                       placeholder="Enter the question or prompt..."
                       className="min-h-20"
+                      value={cardFront}
+                      onChange={(e) => setCardFront(e.target.value)}
                     />
                   </div>
                   <div>
@@ -218,9 +317,11 @@ const AdminDashboard = () => {
                       id="card-back" 
                       placeholder="Enter the answer or explanation..."
                       className="min-h-20"
+                      value={cardBack}
+                      onChange={(e) => setCardBack(e.target.value)}
                     />
                   </div>
-                  <Button className="w-full">
+                  <Button className="w-full" onClick={handleAddCard}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Card
                   </Button>
@@ -234,24 +335,35 @@ const AdminDashboard = () => {
                   <CardDescription>Manage your flashcards</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {cards.map((card) => (
-                      <div key={card.id} className="p-3 border rounded-lg bg-muted/20">
-                        <div className="flex justify-between items-start mb-2">
-                          <p className="font-medium text-sm">{card.front}</p>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="sm">
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="sm">
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                  {!selectedDeckId ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      Select a deck to view and manage cards
+                    </p>
+                  ) : cards.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      No cards found in this deck
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {cards.map((card) => (
+                        <div key={card.id} className="p-3 border rounded-lg bg-muted/20">
+                          <div className="flex justify-between items-start mb-2">
+                            <p className="font-medium text-sm">{card.front}</p>
+                            <div className="flex gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleDeleteCard(card.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
+                          <p className="text-sm text-muted-foreground">{card.back}</p>
                         </div>
-                        <p className="text-sm text-muted-foreground">{card.back}</p>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
