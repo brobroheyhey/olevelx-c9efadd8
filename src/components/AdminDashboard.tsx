@@ -26,6 +26,20 @@ const AdminDashboard = ({ onLogout }: { onLogout?: () => void }) => {
 
   const fetchDecks = async () => {
     try {
+      // Check authentication first
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('Current user:', user);
+      
+      if (!user) {
+        console.error('No authenticated user found');
+        toast({
+          title: "Authentication Error",
+          description: "You need to be logged in to view decks",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('decks')
         .select(`
@@ -34,13 +48,24 @@ const AdminDashboard = ({ onLogout }: { onLogout?: () => void }) => {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      console.log('Decks query result:', { data, error });
+
+      if (error) {
+        console.error('Error fetching decks:', error);
+        toast({
+          title: "Error",
+          description: `Failed to fetch decks: ${error.message}`,
+          variant: "destructive",
+        });
+        throw error;
+      }
 
       const decksWithCardCount = data?.map(deck => ({
         ...deck,
         cardCount: deck.cards?.[0]?.count || 0
       })) || [];
 
+      console.log('Processed decks:', decksWithCardCount);
       setDecks(decksWithCardCount);
     } catch (error) {
       console.error('Error fetching decks:', error);
