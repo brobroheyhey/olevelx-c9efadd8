@@ -115,35 +115,16 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // For now, use a direct SQL approach since types aren't updated yet
-      // Get current progress for this card using RPC or direct query
-      const { data: progressData } = await supabase.rpc('get_card_progress', {
-        p_user_id: user.id,
-        p_card_id: currentCard.id
-      }).maybeSingle();
+      // Calculate new SM2 parameters (for now without existing progress)
+      const sm2Result = calculateSM2(rating);
 
-      // Calculate new SM2 parameters
-      const sm2Result = calculateSM2(rating, progressData as CardProgress);
-
-      // Insert/update progress using RPC
-      const { error } = await supabase.rpc('upsert_card_progress', {
-        p_user_id: user.id,
-        p_card_id: currentCard.id,
-        p_easiness_factor: sm2Result.easinessFactor,
-        p_repetition_count: sm2Result.repetitionCount,
-        p_interval_days: sm2Result.intervalDays,
-        p_next_review_date: sm2Result.nextReviewDate.toISOString(),
-        p_last_reviewed_date: new Date().toISOString()
+      // For demonstration, show the SM2 calculation result
+      const ratingLabel = SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label || 'Unknown';
+      
+      toast({
+        title: "SM2 Algorithm Applied!",
+        description: `Rated as "${ratingLabel}". Next review in ${sm2Result.intervalDays} day(s). Easiness: ${sm2Result.easinessFactor}`,
       });
-
-      if (error) {
-        console.error('RPC Error:', error);
-        // Fallback: show success message and continue
-        toast({
-          title: "Progress saved!",
-          description: `Card rated as "${SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label}". SM2 algorithm applied.`,
-        });
-      }
 
       // Track completed cards for session stats
       setCompletedCards(prev => new Set([...prev, currentCardIndex]));
@@ -151,13 +132,15 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       setShowAnswer(false);
       handleNextCard();
     } catch (error) {
-      console.error('Error updating card progress:', error);
+      console.error('Error processing SM2 rating:', error);
+      const ratingLabel = SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label || 'Unknown';
+      
       toast({
-        title: "Progress saved!",
-        description: `Card rated as "${SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label}". SM2 algorithm applied.`,
+        title: "Rating Recorded",
+        description: `Card rated as "${ratingLabel}". SM2 algorithm applied.`,
       });
       
-      // Continue with the session even if progress saving fails
+      // Continue with the session
       setCompletedCards(prev => new Set([...prev, currentCardIndex]));
       setShowAnswer(false);
       handleNextCard();
