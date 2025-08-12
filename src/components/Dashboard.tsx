@@ -47,24 +47,33 @@ const Dashboard = ({ onSelectDeck, onLogout }: DashboardProps) => {
 
   const fetchDecks = async () => {
     try {
-      // Fetch all public decks (for now, we'll add user-specific decks later)
+      // Fetch all public decks with card counts
       const { data, error } = await supabase
         .from('decks')
         .select(`
           id,
           name,
           description,
-          cards(count)
+          is_public
         `)
         .eq('is_public', true);
 
       if (error) throw error;
 
-      // Transform the data to include card count
-      const decksWithCount = data?.map(deck => ({
-        ...deck,
-        card_count: deck.cards?.[0]?.count || 0
-      })) || [];
+      // Get card counts for each deck
+      const decksWithCount = await Promise.all(
+        (data || []).map(async (deck) => {
+          const { count } = await supabase
+            .from('cards')
+            .select('*', { count: 'exact', head: true })
+            .eq('deck_id', deck.id);
+          
+          return {
+            ...deck,
+            card_count: count || 0
+          };
+        })
+      );
 
       setDecks(decksWithCount);
     } catch (error) {
