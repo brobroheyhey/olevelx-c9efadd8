@@ -4,28 +4,36 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { RotateCcw, ChevronRight, ArrowLeft, Eye, EyeOff, BookOpen, Lightbulb } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { RotateCcw, ChevronRight, ArrowLeft, Eye, EyeOff, BookOpen, Lightbulb, HelpCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { calculateAnkiSM2, SM2_BUTTON_CONFIG, type SM2Rating, type AnkiCardProgress, CARD_STATES } from "@/utils/sm2Algorithm";
 
 interface FlashcardViewProps {
   deckId?: string;
   onBackToDashboard: () => void;
 }
 
-interface Card {
+interface StudyCard {
   id: string;
   front: string;
   back: string;
+  easiness_factor: number;
+  repetition_count: number;
+  interval_days: number;
+  next_review_date: string;
+  last_reviewed_date?: string;
+  reappearTime?: Date;
 }
 
 const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
-  const [cards, setCards] = useState<Card[]>([]);
+  const [studyCards, setStudyCards] = useState<StudyCard[]>([]);
   const [deckName, setDeckName] = useState("");
   const [loading, setLoading] = useState(true);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [completedCards, setCompletedCards] = useState<Set<number>>(new Set());
+  const [completedCards, setCompletedCards] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -36,13 +44,24 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
 
   const fetchCards = async () => {
     try {
-      // Fetch deck info and cards
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Authentication required",
+          description: "Please sign in to study flashcards.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Fetch deck info
       const { data: deckData } = await supabase
         .from('decks')
         .select('name')
         .eq('id', deckId)
         .single();
 
+      // Fetch cards with their progress using direct query
       const { data: cardsData, error } = await supabase
         .from('cards')
         .select('id, front, back')
@@ -50,8 +69,65 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
 
       if (error) throw error;
 
+      // Check each card's progress to see if it's due for review
+      const dueCards: StudyCard[] = [];
+      
+      if (cardsData) {
+        for (const card of cardsData) {
+          try {
+            // Get card progress using existing RPC function  
+            const progressResult = await (supabase as any)
+              .rpc('get_card_progress', { 
+                p_user_id: user.id, 
+                p_card_id: card.id 
+              });
+            const progressData = progressResult.data;
+
+            if (!progressData) {
+              // New card - add to study
+              dueCards.push({
+                id: card.id,
+                front: card.front,
+                back: card.back,
+                easiness_factor: 2.5,
+                repetition_count: 0,
+                interval_days: 1,
+                next_review_date: new Date(Date.now() - 86400000).toISOString() // Yesterday
+              });
+            } else {
+              // Check if card is due
+              const nextReview = new Date(progressData.next_review_date);
+              if (nextReview <= new Date()) {
+                dueCards.push({
+                  id: card.id,
+                  front: card.front,
+                  back: card.back,
+                  easiness_factor: progressData.easiness_factor,
+                  repetition_count: progressData.repetition_count,
+                  interval_days: progressData.interval_days,
+                  next_review_date: progressData.next_review_date,
+                  last_reviewed_date: progressData.last_reviewed_date
+                });
+              }
+            }
+          } catch (progressError) {
+            console.error('Error checking card progress:', progressError);
+            // Add as new card if progress check fails
+            dueCards.push({
+              id: card.id,
+              front: card.front,
+              back: card.back,
+              easiness_factor: 2.5,
+              repetition_count: 0,
+              interval_days: 1,
+              next_review_date: new Date(Date.now() - 86400000).toISOString()
+            });
+          }
+        }
+      }
+
       setDeckName(deckData?.name || "Study Deck");
-      setCards(cardsData || []);
+      setStudyCards(dueCards);
     } catch (error) {
       console.error('Error fetching cards:', error);
       toast({
@@ -64,12 +140,12 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     }
   };
 
-  const currentCard = cards[currentCardIndex];
-  const totalCards = cards.length;
+  const currentCard = studyCards[currentCardIndex];
+  const totalCards = studyCards.length;
   const progress = totalCards > 0 ? (completedCards.size / totalCards) * 100 : 0;
 
   const handleNextCard = () => {
-    if (currentCardIndex < cards.length - 1) {
+    if (currentCardIndex < studyCards.length - 1) {
       setCurrentCardIndex(currentCardIndex + 1);
       setShowAnswer(false);
     } else {
@@ -81,13 +157,126 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     }
   };
 
-  const handleMarkComplete = () => {
-    setCompletedCards(prev => new Set([...prev, currentCardIndex]));
-    handleNextCard();
-  };
+  const handleSM2Rating = async (rating: SM2Rating) => {
+    if (!currentCard) return;
 
-  const handleSkip = () => {
-    handleNextCard();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get existing progress from current card
+      const currentProgress: AnkiCardProgress | undefined = currentCard.repetition_count > 0 ? {
+        state: 'review' as const,
+        easiness_factor: currentCard.easiness_factor,
+        interval_days: currentCard.interval_days,
+        repetitions: currentCard.repetition_count,
+        lapses: 0,
+        learning_step: 0,
+        next_review_date: currentCard.next_review_date
+      } : undefined;
+
+      // Calculate new SM2 parameters
+      const sm2Result = calculateAnkiSM2(rating, currentProgress);
+
+      // Save progress to database using existing RPC function
+      await (supabase as any)
+        .rpc('upsert_card_progress', {
+          p_user_id: user.id,
+          p_card_id: currentCard.id,
+          p_easiness_factor: sm2Result.easinessFactor,
+          p_repetition_count: sm2Result.repetitions,
+          p_interval_days: sm2Result.intervalDays,
+          p_next_review_date: sm2Result.nextReviewDate.toISOString(),
+          p_last_reviewed_date: new Date().toISOString()
+        });
+
+
+      // Format interval display
+      const getIntervalDisplay = (intervalMinutes: number, staysInSession: boolean) => {
+        if (staysInSession) {
+          if (intervalMinutes < 60) {
+            return `${intervalMinutes} minute${intervalMinutes !== 1 ? 's' : ''}`;
+          } else {
+            const hours = Math.round(intervalMinutes / 60);
+            return `${hours} hour${hours !== 1 ? 's' : ''}`;
+          }
+        } else {
+          const days = Math.round(intervalMinutes / (24 * 60));
+          if (days === 1) {
+            return '1 day';
+          } else {
+            return `${days} days`;
+          }
+        }
+      };
+
+      const ratingLabel = SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label || 'Unknown';
+      const intervalDisplay = getIntervalDisplay(sm2Result.intervalMinutes, sm2Result.staysInSession);
+      
+      let description = sm2Result.staysInSession 
+        ? `Card will reappear in this session in ${intervalDisplay}.`
+        : `Card will appear again in ${intervalDisplay}.`;
+      
+      if (sm2Result.isLeech) {
+        description += " ⚠️ Leech detected!";
+      }
+      
+      if (sm2Result.graduatedFromLearning) {
+        description += " 🎓 Graduated to review!";
+      }
+      
+      toast({
+        title: `Rated "${ratingLabel}"`,
+        description,
+      });
+
+      if (sm2Result.staysInSession) {
+        // Add card to back of queue with reappear time
+        const updatedCard = {
+          ...currentCard,
+          reappearTime: sm2Result.nextReviewDate
+        };
+        
+        const newStudyCards = [
+          ...studyCards.slice(0, currentCardIndex),
+          ...studyCards.slice(currentCardIndex + 1),
+          updatedCard
+        ];
+        
+        setStudyCards(newStudyCards);
+        
+        // Adjust current index
+        if (currentCardIndex >= newStudyCards.length - 1) {
+          setCurrentCardIndex(0);
+        }
+      } else {
+        // Remove card from study session
+        const newStudyCards = studyCards.filter((_, index) => index !== currentCardIndex);
+        setStudyCards(newStudyCards);
+        setCompletedCards(prev => new Set([...prev, currentCard.id]));
+        
+        // Adjust current index if needed
+        if (currentCardIndex >= newStudyCards.length && newStudyCards.length > 0) {
+          setCurrentCardIndex(newStudyCards.length - 1);
+        } else if (newStudyCards.length === 0) {
+          // Session complete
+          toast({
+            title: "Session Complete!",
+            description: `You've completed all available cards.`,
+          });
+        }
+      }
+      
+      setShowAnswer(false);
+    } catch (error) {
+      console.error('Error processing SM2 rating:', error);
+      
+      toast({
+        title: "Error",
+        description: `Failed to save progress. Please try again.`,
+        variant: "destructive"
+      });
+    }
   };
 
   const handleRestart = () => {
@@ -107,7 +296,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     );
   }
 
-  if (cards.length === 0) {
+  if (studyCards.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
         {/* Header */}
@@ -128,8 +317,8 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         
         <div className="container mx-auto px-4 py-20 text-center">
           <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-4">No Cards Available</h2>
-          <p className="text-muted-foreground mb-6">This deck doesn't have any flashcards yet.</p>
+          <h2 className="text-2xl font-bold mb-4">No Cards Due</h2>
+          <p className="text-muted-foreground mb-6">All cards have been studied! Come back later for reviews.</p>
           <Button onClick={onBackToDashboard}>Return to Dashboard</Button>
         </div>
       </div>
@@ -159,8 +348,8 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         <Alert className="mb-6 border-primary/20 bg-primary/5">
           <Lightbulb className="h-4 w-4" />
           <AlertDescription className="text-sm">
-            <strong>Study Tip:</strong> Before revealing the answer, try to say or write out your response. 
-            This active recall technique will help improve your memory retention.
+            <strong>Spaced Repetition:</strong> Rate each card honestly to optimize your learning. 
+            Cards you find difficult will appear more frequently, while easy cards will be spaced out longer.
           </AlertDescription>
         </Alert>
 
@@ -217,25 +406,35 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         </div>
 
         {/* Action Buttons */}
-        <div className="max-w-md mx-auto">
+        <div className="max-w-2xl mx-auto">
           {showAnswer ? (
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <Button 
-                variant="outline" 
-                onClick={handleSkip}
-                className="flex items-center gap-2"
-              >
-                <ChevronRight className="h-4 w-4" />
-                Skip
-              </Button>
-              <Button 
-                onClick={handleMarkComplete}
-                className="flex items-center gap-2"
-              >
-                <ChevronRight className="h-4 w-4" />
-                Got It!
-              </Button>
-            </div>
+            <TooltipProvider>
+              <div className="space-y-4 mb-6">
+                <div className="flex items-center gap-2 justify-center text-sm text-muted-foreground">
+                  <HelpCircle className="h-4 w-4" />
+                  <span>Rate how well you knew this card:</span>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {SM2_BUTTON_CONFIG.map((config) => (
+                    <Tooltip key={config.value}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={() => handleSM2Rating(config.value)}
+                          variant={config.variant}
+                          className="h-auto py-3 px-4 flex flex-col items-center gap-2"
+                        >
+                          <span className="font-medium">{config.label}</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-center max-w-xs">{config.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </div>
+              </div>
+            </TooltipProvider>
           ) : (
             <div className="flex justify-center mb-6">
               <Button 
@@ -260,30 +459,30 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
               Flip Card
             </Button>
             
-            {currentCardIndex === totalCards - 1 && (
+            {studyCards.length === 1 && (
               <Button
                 variant="outline"
-                onClick={handleRestart}
+                onClick={() => fetchCards()}
                 size="sm"
               >
                 <RotateCcw className="h-4 w-4 mr-2" />
-                Restart Deck
+                Refresh Cards
               </Button>
             )}
           </div>
         </div>
 
         {/* Session Summary */}
-        {completedCards.size === totalCards && (
+        {studyCards.length === 0 && completedCards.size > 0 && (
           <Card className="max-w-md mx-auto mt-8 bg-primary/5 border-primary/20">
             <CardContent className="p-6 text-center">
               <h3 className="text-lg font-semibold mb-2">Session Complete!</h3>
               <p className="text-muted-foreground mb-4">
-                You've completed all {totalCards} cards in this deck.
+                You've completed {completedCards.size} cards in this session.
               </p>
               <div className="flex gap-2 justify-center">
-                <Button onClick={handleRestart} variant="outline" size="sm">
-                  Study Again
+                <Button onClick={() => fetchCards()} variant="outline" size="sm">
+                  Check for More
                 </Button>
                 <Button onClick={onBackToDashboard} size="sm">
                   Back to Dashboard
