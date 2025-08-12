@@ -15,22 +15,19 @@ interface FlashcardViewProps {
   onBackToDashboard: () => void;
 }
 
-interface Card {
+interface StudyCard {
   id: string;
   front: string;
   back: string;
-  card_progress?: {
-    id: string;
-    easiness_factor: number;
-    repetition_count: number;
-    interval_days: number;
-    next_review_date: string;
-    last_reviewed_date?: string;
-  }[];
+  easiness_factor: number;
+  repetition_count: number;
+  interval_days: number;
+  next_review_date: string;
+  last_reviewed_date?: string;
 }
 
 const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
-  const [studyCards, setStudyCards] = useState<Card[]>([]);
+  const [studyCards, setStudyCards] = useState<StudyCard[]>([]);
   const [deckName, setDeckName] = useState("");
   const [loading, setLoading] = useState(true);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
@@ -63,39 +60,70 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         .eq('id', deckId)
         .single();
 
-      // Fetch cards with their progress
+      // Fetch cards with their progress using direct query
       const { data: cardsData, error } = await supabase
         .from('cards')
-        .select(`
-          id, front, back,
-          card_progress (
-            id, easiness_factor, repetition_count, interval_days, 
-            next_review_date, last_reviewed_date
-          )
-        `)
+        .select('id, front, back')
         .eq('deck_id', deckId);
 
       if (error) throw error;
 
-      if (!cardsData || cardsData.length === 0) {
-        setDeckName(deckData?.name || "Study Deck");
-        setStudyCards([]);
-        return;
-      }
+      // Check each card's progress to see if it's due for review
+      const dueCards: StudyCard[] = [];
+      
+      if (cardsData) {
+        for (const card of cardsData) {
+          try {
+            // Get card progress using existing RPC function  
+            const progressResult = await (supabase as any)
+              .rpc('get_card_progress', { 
+                p_user_id: user.id, 
+                p_card_id: card.id 
+              });
+            const progressData = progressResult.data;
 
-      // Filter cards that are due for review or are new
-      const now = new Date();
-      const dueCards = cardsData.filter(card => {
-        // New cards (no progress) should be studied
-        if (!card.card_progress || card.card_progress.length === 0) {
-          return true;
+            if (!progressData) {
+              // New card - add to study
+              dueCards.push({
+                id: card.id,
+                front: card.front,
+                back: card.back,
+                easiness_factor: 2.5,
+                repetition_count: 0,
+                interval_days: 1,
+                next_review_date: new Date(Date.now() - 86400000).toISOString() // Yesterday
+              });
+            } else {
+              // Check if card is due
+              const nextReview = new Date(progressData.next_review_date);
+              if (nextReview <= new Date()) {
+                dueCards.push({
+                  id: card.id,
+                  front: card.front,
+                  back: card.back,
+                  easiness_factor: progressData.easiness_factor,
+                  repetition_count: progressData.repetition_count,
+                  interval_days: progressData.interval_days,
+                  next_review_date: progressData.next_review_date,
+                  last_reviewed_date: progressData.last_reviewed_date
+                });
+              }
+            }
+          } catch (progressError) {
+            console.error('Error checking card progress:', progressError);
+            // Add as new card if progress check fails
+            dueCards.push({
+              id: card.id,
+              front: card.front,
+              back: card.back,
+              easiness_factor: 2.5,
+              repetition_count: 0,
+              interval_days: 1,
+              next_review_date: new Date(Date.now() - 86400000).toISOString()
+            });
+          }
         }
-        
-        // Cards with progress - check if due
-        const progress = card.card_progress[0];
-        const nextReview = new Date(progress.next_review_date);
-        return nextReview <= now;
-      });
+      }
 
       setDeckName(deckData?.name || "Study Deck");
       setStudyCards(dueCards);
@@ -135,39 +163,32 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get existing progress
-      const existingProgress = currentCard.card_progress?.[0];
-      const currentProgress: AnkiCardProgress | undefined = existingProgress ? {
-        state: 'new' as const,
-        easiness_factor: existingProgress.easiness_factor,
-        interval_days: existingProgress.interval_days,
-        repetitions: existingProgress.repetition_count,
+      // Get existing progress from current card
+      const currentProgress: AnkiCardProgress | undefined = currentCard.repetition_count > 0 ? {
+        state: 'review' as const,
+        easiness_factor: currentCard.easiness_factor,
+        interval_days: currentCard.interval_days,
+        repetitions: currentCard.repetition_count,
         lapses: 0,
         learning_step: 0,
-        next_review_date: existingProgress.next_review_date
+        next_review_date: currentCard.next_review_date
       } : undefined;
 
       // Calculate new SM2 parameters
       const sm2Result = calculateAnkiSM2(rating, currentProgress);
 
-      // Save progress to database
-      const progressData = {
-        user_id: user.id,
-        card_id: currentCard.id,
-        easiness_factor: sm2Result.easinessFactor,
-        repetition_count: sm2Result.repetitions,
-        interval_days: sm2Result.intervalDays,
-        next_review_date: sm2Result.nextReviewDate.toISOString(),
-        last_reviewed_date: new Date().toISOString()
-      };
-
-      const { error } = await supabase
-        .from('card_progress')
-        .upsert(progressData, {
-          onConflict: 'user_id,card_id'
+      // Save progress to database using existing RPC function
+      await (supabase as any)
+        .rpc('upsert_card_progress', {
+          p_user_id: user.id,
+          p_card_id: currentCard.id,
+          p_easiness_factor: sm2Result.easinessFactor,
+          p_repetition_count: sm2Result.repetitions,
+          p_interval_days: sm2Result.intervalDays,
+          p_next_review_date: sm2Result.nextReviewDate.toISOString(),
+          p_last_reviewed_date: new Date().toISOString()
         });
 
-      if (error) throw error;
 
       // Format interval display
       const getIntervalDisplay = (intervalDays: number) => {
@@ -218,7 +239,6 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       setShowAnswer(false);
     } catch (error) {
       console.error('Error processing SM2 rating:', error);
-      const ratingLabel = SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label || 'Unknown';
       
       toast({
         title: "Error",
