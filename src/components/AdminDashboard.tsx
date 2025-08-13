@@ -176,11 +176,52 @@ const AdminDashboard = ({ onLogout }: { onLogout?: () => void }) => {
     fetchDecks(); // Refresh the deck list
   };
 
-  const [students] = useState([
-    { id: "1", name: "John Smith", email: "john@example.com", decksStudied: 3, totalCards: 144 },
-    { id: "2", name: "Sarah Johnson", email: "sarah@example.com", decksStudied: 2, totalCards: 77 },
-    { id: "3", name: "Mike Wilson", email: "mike@example.com", decksStudied: 1, totalCards: 45 },
-  ]);
+  const [students, setStudents] = useState<any[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(true);
+
+  const fetchStudents = async () => {
+    try {
+      // Get all study sessions with user profiles and calculate stats
+      const { data: sessions, error } = await supabase
+        .from('study_sessions')
+        .select(`
+          user_id,
+          total_time_seconds,
+          cards_studied,
+          profiles!inner(name, email)
+        `);
+
+      if (error) throw error;
+
+      // Group by user and calculate totals
+      const userStats = sessions?.reduce((acc: any, session: any) => {
+        const userId = session.user_id;
+        if (!acc[userId]) {
+          acc[userId] = {
+            id: userId,
+            name: session.profiles.name || 'Unknown',
+            email: session.profiles.email || 'N/A',
+            totalTimeMinutes: 0,
+            totalCardsReviewed: 0
+          };
+        }
+        acc[userId].totalTimeMinutes += Math.round((session.total_time_seconds || 0) / 60);
+        acc[userId].totalCardsReviewed += session.cards_studied || 0;
+        return acc;
+      }, {}) || {};
+
+      const studentsList = Object.values(userStats);
+      setStudents(studentsList);
+    } catch (error) {
+      console.error('Error fetching students:', error);
+    } finally {
+      setStudentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-accent/10">
@@ -404,29 +445,36 @@ const AdminDashboard = ({ onLogout }: { onLogout?: () => void }) => {
           <TabsContent value="students" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Student Progress</h2>
-              <div className="flex gap-2">
-                <Input placeholder="Search students..." className="w-64" />
-                <Button variant="outline">Export Data</Button>
-              </div>
             </div>
 
             <div className="grid gap-4">
-              {students.map((student) => (
-                <Card key={student.id}>
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h3 className="font-semibold">{student.name}</h3>
-                        <p className="text-sm text-muted-foreground">{student.email}</p>
+              {studentsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">Loading student data...</p>
+                </div>
+              ) : students.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No student data available</p>
+                </div>
+              ) : (
+                students.map((student) => (
+                  <Card key={student.id}>
+                    <CardContent className="p-6">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h3 className="font-semibold">{student.name}</h3>
+                          <p className="text-sm text-muted-foreground">{student.email}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">{student.totalTimeMinutes} min studied</p>
+                          <p className="text-sm text-muted-foreground">{student.totalCardsReviewed} Cards Reviewed</p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-medium">{student.decksStudied} Decks Studied</p>
-                        <p className="text-sm text-muted-foreground">{student.totalCards} Cards Reviewed</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
           </TabsContent>
         </Tabs>

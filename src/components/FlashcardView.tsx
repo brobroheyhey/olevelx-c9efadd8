@@ -34,7 +34,20 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [completedCards, setCompletedCards] = useState<Set<string>>(new Set());
+  const [studyStartTime, setStudyStartTime] = useState<Date>(new Date());
+  const [currentStudyTime, setCurrentStudyTime] = useState<number>(0);
   const { toast } = useToast();
+
+  // Timer for study session
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      const elapsed = Math.floor((now.getTime() - studyStartTime.getTime()) / 1000 / 60); // minutes
+      setCurrentStudyTime(elapsed);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [studyStartTime]);
 
   useEffect(() => {
     if (deckId) {
@@ -191,44 +204,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         });
 
 
-      // Format interval display
-      const getIntervalDisplay = (intervalMinutes: number, staysInSession: boolean) => {
-        if (staysInSession) {
-          if (intervalMinutes < 60) {
-            return `${intervalMinutes} minute${intervalMinutes !== 1 ? 's' : ''}`;
-          } else {
-            const hours = Math.round(intervalMinutes / 60);
-            return `${hours} hour${hours !== 1 ? 's' : ''}`;
-          }
-        } else {
-          const days = Math.round(intervalMinutes / (24 * 60));
-          if (days === 1) {
-            return '1 day';
-          } else {
-            return `${days} days`;
-          }
-        }
-      };
-
-      const ratingLabel = SM2_BUTTON_CONFIG.find(c => c.value === rating)?.label || 'Unknown';
-      const intervalDisplay = getIntervalDisplay(sm2Result.intervalMinutes, sm2Result.staysInSession);
-      
-      let description = sm2Result.staysInSession 
-        ? `Card will reappear in this session in ${intervalDisplay}.`
-        : `Card will appear again in ${intervalDisplay}.`;
-      
-      if (sm2Result.isLeech) {
-        description += " ⚠️ Leech detected!";
-      }
-      
-      if (sm2Result.graduatedFromLearning) {
-        description += " 🎓 Graduated to review!";
-      }
-      
-      toast({
-        title: `Rated "${ratingLabel}"`,
-        description,
-      });
+      // Remove toast notifications as requested
 
       if (sm2Result.staysInSession) {
         // Add card to back of queue with reappear time
@@ -362,6 +338,9 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
             </Badge>
             <Badge variant="secondary" className="px-3 py-1">
               {completedCards.size} completed
+            </Badge>
+            <Badge variant="outline" className="px-3 py-1">
+              {currentStudyTime} min
             </Badge>
           </div>
           <Progress value={progress} className="max-w-md mx-auto h-2" />
