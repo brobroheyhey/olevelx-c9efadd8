@@ -211,7 +211,28 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     }
   };
 
-  const currentCard = studyCards[currentCardIndex];
+  // Helper function to check if a card is ready to be shown
+  const isCardReady = (card: StudyCard) => {
+    if (!card.reappearTime) return true;
+    return new Date() >= card.reappearTime;
+  };
+
+  // Find the next ready card
+  const findNextReadyCard = () => {
+    const availableCards = studyCards.filter(isCardReady);
+    if (availableCards.length === 0) return null;
+    
+    // Find the current card in available cards or default to first
+    let nextIndex = availableCards.findIndex(card => card.id === currentCard?.id);
+    if (nextIndex === -1) nextIndex = 0;
+    
+    return { card: availableCards[nextIndex], index: studyCards.indexOf(availableCards[nextIndex]) };
+  };
+
+  const nextReady = findNextReadyCard();
+  const currentCard = nextReady?.card || null;
+  const actualCurrentIndex = nextReady?.index || 0;
+
   const totalCards = initialTotalCards; // Use initial total for consistent progress tracking
   const remainingCards = studyCards.length;
   const progress = totalCards > 0 ? (cardsRated / totalCards) * 100 : 0;
@@ -281,38 +302,30 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       }
 
       if (sm2Result.staysInSession) {
+        // For "Again" rating, set a short reappear time (30 seconds)
+        const reappearTime = rating === 1 
+          ? new Date(Date.now() + 30 * 1000) // 30 seconds
+          : sm2Result.nextReviewDate;
+        
         // Add card to back of queue with reappear time
         const updatedCard = {
           ...currentCard,
-          reappearTime: sm2Result.nextReviewDate
+          reappearTime: reappearTime
         };
         
         const newStudyCards = [
-          ...studyCards.slice(0, currentCardIndex),
-          ...studyCards.slice(currentCardIndex + 1),
+          ...studyCards.slice(0, actualCurrentIndex),
+          ...studyCards.slice(actualCurrentIndex + 1),
           updatedCard
         ];
         
         setStudyCards(newStudyCards);
-        
-        // Adjust current index
-        if (currentCardIndex >= newStudyCards.length - 1) {
-          setCurrentCardIndex(0);
-        }
+        setCurrentCardIndex(0); // Reset to check for next ready card
       } else {
         // Card graduates - remove from study session
-        const newStudyCards = studyCards.filter((_, index) => index !== currentCardIndex);
-        
-        // Adjust current index
-        let newCurrentIndex = currentCardIndex;
-        if (currentCardIndex >= newStudyCards.length && newStudyCards.length > 0) {
-          newCurrentIndex = newStudyCards.length - 1;
-        } else if (newStudyCards.length === 0) {
-          newCurrentIndex = 0;
-        }
-        
+        const newStudyCards = studyCards.filter((_, index) => index !== actualCurrentIndex);
         setStudyCards(newStudyCards);
-        setCurrentCardIndex(newCurrentIndex);
+        setCurrentCardIndex(0); // Reset to check for next ready card
       }
       
       setShowAnswer(false);
@@ -341,6 +354,43 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading flashcards...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if no cards are ready (waiting for reappear time)
+  if (studyCards.length > 0 && !currentCard) {
+    const nextAvailableTime = Math.min(...studyCards
+      .filter(card => card.reappearTime)
+      .map(card => card.reappearTime!.getTime())
+    );
+    const waitTime = Math.ceil((nextAvailableTime - Date.now()) / 1000);
+    
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+        <header className="border-b border-border/40 backdrop-blur-sm bg-background/60">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-8 w-8 text-primary" />
+                <h1 className="text-2xl font-bold">OLevelX</h1>
+              </div>
+              <Button variant="outline" onClick={onBackToDashboard}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </div>
+          </div>
+        </header>
+        
+        <div className="container mx-auto px-4 py-20 text-center">
+          <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-4">Waiting for Next Card</h2>
+          <p className="text-muted-foreground mb-6">
+            Next card available in {waitTime} seconds
+          </p>
+          <Button onClick={() => window.location.reload()}>Refresh</Button>
         </div>
       </div>
     );
