@@ -231,24 +231,19 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       } else {
         // Card graduates - remove from study session and mark as completed
         const newStudyCards = studyCards.filter((_, index) => index !== currentCardIndex);
+        const newCompletedCards = new Set([...completedCards, currentCard.id]);
         
         // Update states immediately for real-time feedback
         setStudyCards(newStudyCards);
-        setCompletedCards(prev => {
-          const updated = new Set([...prev, currentCard.id]);
-          
-          // Check if session is complete after this update
-          if (updated.size === totalCards) {
-            setTimeout(() => {
-              toast({
-                title: "🎉 Session Complete!",
-                description: `Congratulations! You've completed all ${totalCards} cards in this session.`,
-              });
-            }, 100); // Small delay to ensure state updates first
-          }
-          
-          return updated;
-        });
+        setCompletedCards(newCompletedCards);
+        
+        // Check if session is complete
+        if (newCompletedCards.size === totalCards) {
+          toast({
+            title: "🎉 Session Complete!",
+            description: `Congratulations! You've completed all ${totalCards} cards in this session.`,
+          });
+        }
         
         // Adjust current index if needed
         if (currentCardIndex >= newStudyCards.length && newStudyCards.length > 0) {
@@ -353,9 +348,6 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
           <div className="flex items-center justify-center gap-4 mb-4">
             <Badge variant="outline" className="px-3 py-1">
               Card {currentCardIndex + 1} of {remainingCards} remaining
-            </Badge>
-            <Badge variant="secondary" className="px-3 py-1">
-              {completedCards.size} of {totalCards} completed
             </Badge>
             <Badge variant="outline" className="px-3 py-1">
               {currentStudyTime} min
