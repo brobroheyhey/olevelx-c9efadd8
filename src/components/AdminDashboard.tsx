@@ -322,12 +322,9 @@ const AdminDashboard = ({ onLogout }: { onLogout?: () => void }) => {
                 <Card key={deck.id}>
                   <CardHeader>
                     <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle>{deck.name}</CardTitle>
-                        <CardDescription>
-                          Created on {new Date(deck.created_at).toLocaleDateString()}
-                        </CardDescription>
-                      </div>
+                       <div>
+                         <CardTitle>{deck.name}</CardTitle>
+                       </div>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm">
                           <Edit className="h-4 w-4" />

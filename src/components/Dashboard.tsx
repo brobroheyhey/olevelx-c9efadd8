@@ -204,15 +204,12 @@ const Dashboard = ({ onSelectDeck, onLogout, onAdminAccess }: DashboardProps) =>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {decks.map((deck) => (
                 <Card key={deck.id} className="hover:shadow-lg transition-all duration-300 border-border/50">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <BookOpen className="h-5 w-5 text-primary" />
-                      {deck.name}
-                    </CardTitle>
-                    <CardDescription>
-                      {deck.description || "Practice flashcards for this subject"}
-                    </CardDescription>
-                  </CardHeader>
+                   <CardHeader>
+                     <CardTitle className="flex items-center gap-2">
+                       <BookOpen className="h-5 w-5 text-primary" />
+                       {deck.name}
+                     </CardTitle>
+                   </CardHeader>
                   <CardContent>
                     <div className="flex justify-between items-center mb-4">
                       <span className="text-sm text-muted-foreground">
