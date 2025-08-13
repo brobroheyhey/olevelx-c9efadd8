@@ -213,6 +213,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      split_emaths_deck: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       upsert_card_progress: {
         Args: {
           p_user_id: string
