@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      card_progress: {
+        Row: {
+          card_id: string
+          created_at: string
+          easiness_factor: number
+          id: string
+          interval_days: number
+          last_reviewed_date: string | null
+          next_review_date: string
+          repetition_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          easiness_factor?: number
+          id?: string
+          interval_days?: number
+          last_reviewed_date?: string | null
+          next_review_date?: string
+          repetition_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          easiness_factor?: number
+          id?: string
+          interval_days?: number
+          last_reviewed_date?: string | null
+          next_review_date?: string
+          repetition_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       cards: {
         Row: {
           back: string
@@ -103,12 +142,89 @@ export type Database = {
         }
         Relationships: []
       }
+      study_sessions: {
+        Row: {
+          cards_correct: number | null
+          cards_studied: number | null
+          completed_at: string | null
+          created_at: string
+          deck_id: string
+          id: string
+          started_at: string
+          total_time_seconds: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cards_correct?: number | null
+          cards_studied?: number | null
+          completed_at?: string | null
+          created_at?: string
+          deck_id: string
+          id?: string
+          started_at?: string
+          total_time_seconds?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cards_correct?: number | null
+          cards_studied?: number | null
+          completed_at?: string | null
+          created_at?: string
+          deck_id?: string
+          id?: string
+          started_at?: string
+          total_time_seconds?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_card_progress: {
+        Args: { p_user_id: string; p_card_id: string }
+        Returns: Json
+      }
+      get_study_cards: {
+        Args: { deck_id_param: string }
+        Returns: {
+          id: string
+          front: string
+          back: string
+          easiness_factor: number
+          repetition_count: number
+          interval_days: number
+          next_review_date: string
+          last_reviewed_date: string
+        }[]
+      }
+      save_card_progress: {
+        Args: {
+          card_id_param: string
+          easiness_factor_param: number
+          repetition_count_param: number
+          interval_days_param: number
+          next_review_date_param: string
+        }
+        Returns: boolean
+      }
+      upsert_card_progress: {
+        Args: {
+          p_user_id: string
+          p_card_id: string
+          p_easiness_factor: number
+          p_repetition_count: number
+          p_interval_days: number
+          p_next_review_date: string
+          p_last_reviewed_date: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

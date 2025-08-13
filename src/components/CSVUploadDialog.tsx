@@ -110,13 +110,14 @@ const CSVUploadDialog = ({ trigger, onSuccess }: CSVUploadDialogProps) => {
         return;
       }
 
-      // Create deck in database
+      // Create deck in database (auto-set as public)
       const { data: deck, error: deckError } = await supabase
         .from('decks')
         .insert({
           name: deckName.trim(),
+          description: `Imported from CSV - ${cards.length} cards`,
           created_by: user.id,
-          is_public: false
+          is_public: true
         })
         .select()
         .single();
