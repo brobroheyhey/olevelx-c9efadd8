@@ -180,15 +180,20 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
 
           if (!progressData) {
             // New card exists - not all graduated
+            console.log(`Card ${card.id} has no progress - not graduated`);
             return false;
           } else {
-            // Check if card is due today
+            // Check if card is due today (use start of tomorrow as cutoff)
             const nextReview = new Date(progressData.next_review_date);
-            const today = new Date();
-            today.setHours(23, 59, 59, 999); // End of today
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0); // Start of tomorrow
             
-            if (nextReview <= today) {
-              // Card is still due - not all graduated
+            console.log(`Card ${card.id}: next_review=${nextReview.toISOString()}, tomorrow=${tomorrow.toISOString()}`);
+            
+            if (nextReview < tomorrow) {
+              // Card is still due today - not all graduated
+              console.log(`Card ${card.id} is still due today - not graduated`);
               return false;
             }
           }
@@ -296,19 +301,38 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         
         // If no more cards in current session, check if all cards in deck are graduated
         if (newStudyCards.length === 0) {
-          const allGraduated = await checkAllCardsGraduated();
-          if (allGraduated) {
-            toast({
-              title: "All cards reviewed!",
-              description: "All cards reviewed, please continue tomorrow.",
-            });
+          console.log('All cards in current session completed, checking if deck is fully graduated...');
+          
+          // Add a small delay to ensure database writes are committed
+          setTimeout(async () => {
+            const allGraduated = await checkAllCardsGraduated();
+            console.log('Graduation check result:', allGraduated);
             
-            // Return to dashboard after a short delay
-            setTimeout(() => {
-              onBackToDashboard();
-            }, 2000);
-            return;
-          }
+            if (allGraduated) {
+              toast({
+                title: "🎉 All cards reviewed!",
+                description: "All cards reviewed, please continue tomorrow.",
+              });
+              
+              // Return to dashboard after a short delay
+              setTimeout(() => {
+                onBackToDashboard();
+              }, 2000);
+            } else {
+              // Fallback: if no cards left but not all graduated, still complete session
+              console.log('Fallback: No cards left in session, completing anyway');
+              toast({
+                title: "Session complete!",
+                description: "No more cards to review in this session.",
+              });
+              
+              setTimeout(() => {
+                onBackToDashboard();
+              }, 2000);
+            }
+          }, 300); // 300ms delay to ensure DB consistency
+          
+          return;
         }
       }
       
