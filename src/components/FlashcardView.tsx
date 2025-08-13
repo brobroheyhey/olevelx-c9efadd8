@@ -33,7 +33,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
   const [loading, setLoading] = useState(true);
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [completedCards, setCompletedCards] = useState<Set<string>>(new Set());
+  const [cardsRated, setCardsRated] = useState<number>(0);
   const [initialTotalCards, setInitialTotalCards] = useState<number>(0);
   const [studyStartTime, setStudyStartTime] = useState<Date>(new Date());
   const [currentStudyTime, setCurrentStudyTime] = useState<number>(0);
@@ -214,7 +214,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
   const currentCard = studyCards[currentCardIndex];
   const totalCards = initialTotalCards; // Use initial total for consistent progress tracking
   const remainingCards = studyCards.length;
-  const progress = totalCards > 0 ? (completedCards.size / totalCards) * 100 : 0;
+  const progress = totalCards > 0 ? (cardsRated / totalCards) * 100 : 0;
 
   const handleNextCard = () => {
     if (currentCardIndex < studyCards.length - 1) {
@@ -224,7 +224,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       // Session complete
       toast({
         title: "Session Complete!",
-        description: `You've completed ${completedCards.size} out of ${totalCards} cards.`,
+        description: `You've completed ${cardsRated} out of ${totalCards} cards.`,
       });
     }
   };
@@ -235,6 +235,10 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      // Increment cards rated counter
+      const newCardsRated = cardsRated + 1;
+      setCardsRated(newCardsRated);
 
       // Get existing progress from current card
       const currentProgress: AnkiCardProgress | undefined = currentCard.repetition_count > 0 ? {
@@ -262,8 +266,19 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
           p_last_reviewed_date: new Date().toISOString()
         });
 
-
-      // Remove toast notifications as requested
+      // Check if session should complete (all initial cards rated)
+      if (newCardsRated >= initialTotalCards) {
+        toast({
+          title: "🎉 Session Complete!",
+          description: `You've completed all ${initialTotalCards} cards!`,
+        });
+        
+        // Return to dashboard after a short delay
+        setTimeout(() => {
+          onBackToDashboard();
+        }, 2000);
+        return;
+      }
 
       if (sm2Result.staysInSession) {
         // Add card to back of queue with reappear time
@@ -298,42 +313,6 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         
         setStudyCards(newStudyCards);
         setCurrentCardIndex(newCurrentIndex);
-        
-        // If no more cards in current session, check if all cards in deck are graduated
-        if (newStudyCards.length === 0) {
-          console.log('All cards in current session completed, checking if deck is fully graduated...');
-          
-          // Add a small delay to ensure database writes are committed
-          setTimeout(async () => {
-            const allGraduated = await checkAllCardsGraduated();
-            console.log('Graduation check result:', allGraduated);
-            
-            if (allGraduated) {
-              toast({
-                title: "🎉 All cards reviewed!",
-                description: "All cards reviewed, please continue tomorrow.",
-              });
-              
-              // Return to dashboard after a short delay
-              setTimeout(() => {
-                onBackToDashboard();
-              }, 2000);
-            } else {
-              // Fallback: if no cards left but not all graduated, still complete session
-              console.log('Fallback: No cards left in session, completing anyway');
-              toast({
-                title: "Session complete!",
-                description: "No more cards to review in this session.",
-              });
-              
-              setTimeout(() => {
-                onBackToDashboard();
-              }, 2000);
-            }
-          }, 300); // 300ms delay to ensure DB consistency
-          
-          return;
-        }
       }
       
       setShowAnswer(false);
@@ -351,7 +330,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
   const handleRestart = () => {
     setCurrentCardIndex(0);
     setShowAnswer(false);
-    setCompletedCards(new Set());
+    setCardsRated(0);
     setStudyStartTime(new Date()); // Reset timer
     fetchCards(); // Reload cards
   };
@@ -541,12 +520,12 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         </div>
 
         {/* Session Summary */}
-        {studyCards.length === 0 && completedCards.size > 0 && (
+        {studyCards.length === 0 && cardsRated > 0 && (
           <Card className="max-w-md mx-auto mt-8 bg-primary/5 border-primary/20">
             <CardContent className="p-6 text-center">
               <h3 className="text-lg font-semibold mb-2">Session Complete!</h3>
               <p className="text-muted-foreground mb-4">
-                You've completed {completedCards.size} cards in this session.
+                You've completed {cardsRated} cards in this session.
               </p>
               <div className="flex gap-2 justify-center">
                 <Button onClick={() => fetchCards()} variant="outline" size="sm">
