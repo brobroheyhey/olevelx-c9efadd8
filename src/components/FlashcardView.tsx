@@ -280,11 +280,10 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
           setCurrentCardIndex(0);
         }
       } else {
-        // Card graduates - remove from study session and mark as completed
+        // Card graduates - remove from study session
         const newStudyCards = studyCards.filter((_, index) => index !== currentCardIndex);
-        const newCompletedCards = new Set([...completedCards, currentCard.id]);
         
-        // Adjust current index first to ensure proper navigation
+        // Adjust current index
         let newCurrentIndex = currentCardIndex;
         if (currentCardIndex >= newStudyCards.length && newStudyCards.length > 0) {
           newCurrentIndex = newStudyCards.length - 1;
@@ -292,35 +291,28 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
           newCurrentIndex = 0;
         }
         
-        // Update all states at once for immediate UI feedback
         setStudyCards(newStudyCards);
-        setCompletedCards(newCompletedCards);
         setCurrentCardIndex(newCurrentIndex);
         
-        // Check if session is complete
-        if (newCompletedCards.size === totalCards) {
-          toast({
-            title: "🎉 Session Complete!",
-            description: `Congratulations! You've completed all ${totalCards} cards in this session.`,
-          });
+        // If no more cards in current session, check if all cards in deck are graduated
+        if (newStudyCards.length === 0) {
+          const allGraduated = await checkAllCardsGraduated();
+          if (allGraduated) {
+            toast({
+              title: "All cards reviewed!",
+              description: "All cards reviewed, please continue tomorrow.",
+            });
+            
+            // Return to dashboard after a short delay
+            setTimeout(() => {
+              onBackToDashboard();
+            }, 2000);
+            return;
+          }
         }
       }
       
       setShowAnswer(false);
-
-      // Check if all cards in the deck have graduated
-      const allGraduated = await checkAllCardsGraduated();
-      if (allGraduated) {
-        toast({
-          title: "All cards reviewed!",
-          description: "All cards reviewed, please continue tomorrow.",
-        });
-        
-        // Return to dashboard after a short delay
-        setTimeout(() => {
-          onBackToDashboard();
-        }, 2000);
-      }
     } catch (error) {
       console.error('Error processing SM2 rating:', error);
       
