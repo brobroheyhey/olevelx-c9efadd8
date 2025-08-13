@@ -23,7 +23,7 @@ export type SM2Rating = typeof SM2_RATINGS[keyof typeof SM2_RATINGS];
 // Anki default settings
 export const ANKI_DEFAULTS = {
   // Learning steps in minutes
-  LEARNING_STEPS: [1, 10],
+  LEARNING_STEPS: [1, 10, 5*60], // 1 min, 10 min, 5 hours
   // Lapse steps in minutes  
   LAPSE_STEPS: [10],
   // Initial ease factor (250% = 2.5)
@@ -97,9 +97,9 @@ function getIntervalMinutes(state: CardState, learningStep: number, rating: SM2R
     if (rating === SM2_RATINGS.AGAIN) {
       return ANKI_DEFAULTS.LEARNING_STEPS[0];
     } else {
-      const nextStep = learningStep + 1;
-      if (nextStep < ANKI_DEFAULTS.LEARNING_STEPS.length) {
-        return ANKI_DEFAULTS.LEARNING_STEPS[nextStep];
+      // For learning cards, use the current learning step interval
+      if (learningStep < ANKI_DEFAULTS.LEARNING_STEPS.length) {
+        return ANKI_DEFAULTS.LEARNING_STEPS[learningStep];
       }
     }
   } else if (state === CARD_STATES.LAPSED) {
@@ -202,13 +202,16 @@ export function calculateAnkiSM2(rating: SM2Rating, currentProgress?: AnkiCardPr
         if (newLapses >= ANKI_DEFAULTS.LEECH_THRESHOLD) {
           isLeech = true;
         }
+      } else if (rating === SM2_RATINGS.HARD) {
+        // Hard cards go back to relearning for 5 minutes
+        newState = CARD_STATES.LEARNING;
+        newLearningStep = 2; // Skip to 5-minute step (index 2)
+        newInterval = minutesToDays(ANKI_DEFAULTS.LEARNING_STEPS[2]); // 5 hours, but will be overridden by minutes
       } else {
-        // Successful review
+        // Successful review (GOOD or EASY)
         newReps += 1;
         
-        if (rating === SM2_RATINGS.HARD) {
-          newInterval = Math.max(1, Math.round(current.interval_days * ANKI_DEFAULTS.HARD_INTERVAL_MULTIPLIER));
-        } else if (rating === SM2_RATINGS.EASY) {
+        if (rating === SM2_RATINGS.EASY) {
           newInterval = Math.round(current.interval_days * newEase * ANKI_DEFAULTS.EASY_INTERVAL_MULTIPLIER);
         } else { // GOOD
           newInterval = Math.round(current.interval_days * newEase);
