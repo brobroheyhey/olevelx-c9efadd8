@@ -233,9 +233,18 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         const newStudyCards = studyCards.filter((_, index) => index !== currentCardIndex);
         const newCompletedCards = new Set([...completedCards, currentCard.id]);
         
-        // Update states immediately for real-time feedback
+        // Adjust current index first to ensure proper navigation
+        let newCurrentIndex = currentCardIndex;
+        if (currentCardIndex >= newStudyCards.length && newStudyCards.length > 0) {
+          newCurrentIndex = newStudyCards.length - 1;
+        } else if (newStudyCards.length === 0) {
+          newCurrentIndex = 0;
+        }
+        
+        // Update all states at once for immediate UI feedback
         setStudyCards(newStudyCards);
         setCompletedCards(newCompletedCards);
+        setCurrentCardIndex(newCurrentIndex);
         
         // Check if session is complete
         if (newCompletedCards.size === totalCards) {
@@ -243,14 +252,6 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
             title: "🎉 Session Complete!",
             description: `Congratulations! You've completed all ${totalCards} cards in this session.`,
           });
-        }
-        
-        // Adjust current index if needed
-        if (currentCardIndex >= newStudyCards.length && newStudyCards.length > 0) {
-          setCurrentCardIndex(newStudyCards.length - 1);
-        } else if (newStudyCards.length === 0) {
-          // All cards completed
-          setCurrentCardIndex(0);
         }
       }
       
