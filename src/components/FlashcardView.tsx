@@ -34,6 +34,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
   const [completedCards, setCompletedCards] = useState<Set<string>>(new Set());
+  const [initialTotalCards, setInitialTotalCards] = useState<number>(0);
   const [studyStartTime, setStudyStartTime] = useState<Date>(new Date());
   const [currentStudyTime, setCurrentStudyTime] = useState<number>(0);
   const { toast } = useToast();
@@ -141,6 +142,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
 
       setDeckName(deckData?.name || "Study Deck");
       setStudyCards(dueCards);
+      setInitialTotalCards(dueCards.length); // Track initial total
     } catch (error) {
       console.error('Error fetching cards:', error);
       toast({
@@ -154,7 +156,8 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
   };
 
   const currentCard = studyCards[currentCardIndex];
-  const totalCards = studyCards.length;
+  const totalCards = initialTotalCards; // Use initial total for consistent progress tracking
+  const remainingCards = studyCards.length;
   const progress = totalCards > 0 ? (completedCards.size / totalCards) * 100 : 0;
 
   const handleNextCard = () => {
@@ -226,20 +229,33 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
           setCurrentCardIndex(0);
         }
       } else {
-        // Remove card from study session
+        // Card graduates - remove from study session and mark as completed
         const newStudyCards = studyCards.filter((_, index) => index !== currentCardIndex);
+        
+        // Update states immediately for real-time feedback
         setStudyCards(newStudyCards);
-        setCompletedCards(prev => new Set([...prev, currentCard.id]));
+        setCompletedCards(prev => {
+          const updated = new Set([...prev, currentCard.id]);
+          
+          // Check if session is complete after this update
+          if (updated.size === totalCards) {
+            setTimeout(() => {
+              toast({
+                title: "🎉 Session Complete!",
+                description: `Congratulations! You've completed all ${totalCards} cards in this session.`,
+              });
+            }, 100); // Small delay to ensure state updates first
+          }
+          
+          return updated;
+        });
         
         // Adjust current index if needed
         if (currentCardIndex >= newStudyCards.length && newStudyCards.length > 0) {
           setCurrentCardIndex(newStudyCards.length - 1);
         } else if (newStudyCards.length === 0) {
-          // Session complete
-          toast({
-            title: "Session Complete!",
-            description: `You've completed all available cards.`,
-          });
+          // All cards completed
+          setCurrentCardIndex(0);
         }
       }
       
@@ -259,6 +275,8 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     setCurrentCardIndex(0);
     setShowAnswer(false);
     setCompletedCards(new Set());
+    setStudyStartTime(new Date()); // Reset timer
+    fetchCards(); // Reload cards
   };
 
   if (loading) {
@@ -334,10 +352,10 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
           <h2 className="text-3xl font-bold mb-4">{deckName}</h2>
           <div className="flex items-center justify-center gap-4 mb-4">
             <Badge variant="outline" className="px-3 py-1">
-              Card {currentCardIndex + 1} of {totalCards}
+              Card {currentCardIndex + 1} of {remainingCards} remaining
             </Badge>
             <Badge variant="secondary" className="px-3 py-1">
-              {completedCards.size} completed
+              {completedCards.size} of {totalCards} completed
             </Badge>
             <Badge variant="outline" className="px-3 py-1">
               {currentStudyTime} min
