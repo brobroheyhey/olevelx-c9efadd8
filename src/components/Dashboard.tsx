@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap, User, LogOut, BookOpen, Clock, BarChart3 } from "lucide-react";
+import { GraduationCap, User, LogOut, BookOpen, Clock, BarChart3, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { isAdmin } from "@/utils/adminUtils";
 
 interface Deck {
   id: string;
@@ -15,11 +16,12 @@ interface Deck {
 interface DashboardProps {
   onSelectDeck: (deckId: string) => void;
   onLogout: () => void;
+  onAdminAccess?: () => void;
 }
 
-const Dashboard = ({ onSelectDeck, onLogout }: DashboardProps) => {
+const Dashboard = ({ onSelectDeck, onLogout, onAdminAccess }: DashboardProps) => {
   const [decks, setDecks] = useState<Deck[]>([]);
-  const [userProfile, setUserProfile] = useState<{ name: string } | null>(null);
+  const [userProfile, setUserProfile] = useState<{ name: string; email: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -34,7 +36,7 @@ const Dashboard = ({ onSelectDeck, onLogout }: DashboardProps) => {
       if (user) {
         const { data } = await supabase
           .from('profiles')
-          .select('name')
+          .select('name, email')
           .eq('id', user.id)
           .single();
         
@@ -116,6 +118,12 @@ const Dashboard = ({ onSelectDeck, onLogout }: DashboardProps) => {
                   <User className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">Welcome, {userProfile.name}</span>
                 </div>
+              )}
+              {userProfile && isAdmin(userProfile.email) && onAdminAccess && (
+                <Button variant="outline" size="sm" onClick={onAdminAccess}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Admin
+                </Button>
               )}
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
@@ -227,9 +235,9 @@ const Dashboard = ({ onSelectDeck, onLogout }: DashboardProps) => {
             <Card className="p-8 text-center">
               <CardContent>
                 <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No decks available yet</h3>
+                <h3 className="text-lg font-semibold mb-2">No study decks available yet</h3>
                 <p className="text-muted-foreground">
-                  Check back later for new study materials.
+                  Your teacher will add study materials soon. Check back later!
                 </p>
               </CardContent>
             </Card>

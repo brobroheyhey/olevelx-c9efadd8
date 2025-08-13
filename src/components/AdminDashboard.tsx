@@ -119,6 +119,8 @@ const AdminDashboard = ({ onLogout }: { onLogout?: () => void }) => {
     }
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const { error } = await supabase
         .from('cards')
         .insert({

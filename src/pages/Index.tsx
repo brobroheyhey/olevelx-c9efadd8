@@ -48,6 +48,7 @@ const Index = () => {
         <Dashboard 
           onSelectDeck={handleSelectDeck}
           onLogout={() => handleNavigation("landing")}
+          onAdminAccess={() => handleNavigation("admin")}
         />
       )}
       {currentView === "auth" && (
