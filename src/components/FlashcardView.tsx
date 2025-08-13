@@ -155,6 +155,57 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     }
   };
 
+  const checkAllCardsGraduated = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return false;
+
+      // Get all cards in the deck
+      const { data: cardsData, error } = await supabase
+        .from('cards')
+        .select('id')
+        .eq('deck_id', deckId);
+
+      if (error || !cardsData) return false;
+
+      // Check if any card is still due for review today
+      for (const card of cardsData) {
+        try {
+          const progressResult = await (supabase as any)
+            .rpc('get_card_progress', { 
+              p_user_id: user.id, 
+              p_card_id: card.id 
+            });
+          const progressData = progressResult.data;
+
+          if (!progressData) {
+            // New card exists - not all graduated
+            return false;
+          } else {
+            // Check if card is due today
+            const nextReview = new Date(progressData.next_review_date);
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // End of today
+            
+            if (nextReview <= today) {
+              // Card is still due - not all graduated
+              return false;
+            }
+          }
+        } catch (progressError) {
+          // If we can't check progress, assume card needs review
+          return false;
+        }
+      }
+
+      // All cards are graduated for today
+      return true;
+    } catch (error) {
+      console.error('Error checking if all cards graduated:', error);
+      return false;
+    }
+  };
+
   const currentCard = studyCards[currentCardIndex];
   const totalCards = initialTotalCards; // Use initial total for consistent progress tracking
   const remainingCards = studyCards.length;
@@ -256,6 +307,20 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
       }
       
       setShowAnswer(false);
+
+      // Check if all cards in the deck have graduated
+      const allGraduated = await checkAllCardsGraduated();
+      if (allGraduated) {
+        toast({
+          title: "All cards reviewed!",
+          description: "All cards reviewed, please continue tomorrow.",
+        });
+        
+        // Return to dashboard after a short delay
+        setTimeout(() => {
+          onBackToDashboard();
+        }, 2000);
+      }
     } catch (error) {
       console.error('Error processing SM2 rating:', error);
       
@@ -347,9 +412,6 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold mb-4">{deckName}</h2>
           <div className="flex items-center justify-center gap-4 mb-4">
-            <Badge variant="outline" className="px-3 py-1">
-              Card {currentCardIndex + 1} of {remainingCards} remaining
-            </Badge>
             <Badge variant="outline" className="px-3 py-1">
               {currentStudyTime} min
             </Badge>
