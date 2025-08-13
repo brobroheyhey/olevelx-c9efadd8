@@ -217,21 +217,21 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
     return new Date() >= card.reappearTime;
   };
 
-  // Find the next ready card
-  const findNextReadyCard = () => {
-    const availableCards = studyCards.filter(isCardReady);
-    if (availableCards.length === 0) return null;
+  // Find the next ready card starting from current index
+  const getReadyCardIndex = () => {
+    const readyCards = studyCards.map((card, index) => ({ card, index })).filter(({ card }) => isCardReady(card));
     
-    // Find the current card in available cards or default to first
-    let nextIndex = availableCards.findIndex(card => card.id === currentCard?.id);
-    if (nextIndex === -1) nextIndex = 0;
+    if (readyCards.length === 0) return -1;
     
-    return { card: availableCards[nextIndex], index: studyCards.indexOf(availableCards[nextIndex]) };
+    // Find a ready card at or after current index, or wrap to beginning
+    let foundIndex = readyCards.findIndex(({ index }) => index >= currentCardIndex);
+    if (foundIndex === -1) foundIndex = 0;
+    
+    return readyCards[foundIndex].index;
   };
 
-  const nextReady = findNextReadyCard();
-  const currentCard = nextReady?.card || null;
-  const actualCurrentIndex = nextReady?.index || 0;
+  const readyCardIndex = getReadyCardIndex();
+  const currentCard = readyCardIndex >= 0 ? studyCards[readyCardIndex] : null;
 
   const totalCards = initialTotalCards; // Use initial total for consistent progress tracking
   const remainingCards = studyCards.length;
@@ -314,8 +314,8 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         };
         
         const newStudyCards = [
-          ...studyCards.slice(0, actualCurrentIndex),
-          ...studyCards.slice(actualCurrentIndex + 1),
+          ...studyCards.slice(0, readyCardIndex),
+          ...studyCards.slice(readyCardIndex + 1),
           updatedCard
         ];
         
@@ -323,7 +323,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
         setCurrentCardIndex(0); // Reset to check for next ready card
       } else {
         // Card graduates - remove from study session
-        const newStudyCards = studyCards.filter((_, index) => index !== actualCurrentIndex);
+        const newStudyCards = studyCards.filter((_, index) => index !== readyCardIndex);
         setStudyCards(newStudyCards);
         setCurrentCardIndex(0); // Reset to check for next ready card
       }
@@ -360,7 +360,7 @@ const FlashcardView = ({ deckId, onBackToDashboard }: FlashcardViewProps) => {
   }
 
   // Check if no cards are ready (waiting for reappear time)
-  if (studyCards.length > 0 && !currentCard) {
+  if (studyCards.length > 0 && readyCardIndex === -1) {
     const nextAvailableTime = Math.min(...studyCards
       .filter(card => card.reappearTime)
       .map(card => card.reappearTime!.getTime())
